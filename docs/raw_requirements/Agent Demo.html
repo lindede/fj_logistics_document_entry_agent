@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>国际物流单证录入智能体原型设计</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --text: #1a1a1a;
+      --muted: #555;
+      --border: #ccc;
+      --bg: #fff;
+      --code-bg: #f6f8fa;
+    }
+    body {
+      margin: 0 auto;
+      max-width: 880px;
+      padding: 32px 20px 64px;
+      font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    h1, h2, h3, h4 { line-height: 1.3; }
+    h1 { text-align: center; font-size: 1.6rem; margin-bottom: 1.5rem; }
+    h2 { margin-top: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; }
+    h3 { margin-top: 1.5rem; }
+    h4 { margin-top: 1.2rem; color: var(--muted); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.75rem 0 1.25rem;
+      font-size: 0.95rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.45rem 0.6rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f3f3f3; }
+    ol.task-list { list-style: decimal; padding-left: 1.5rem; }
+    ol.task-list > li { margin: 0.35rem 0; }
+    ol.layer-list { list-style: decimal; padding-left: 1.5rem; }
+    ol.demo-list { list-style: decimal; padding-left: 1.5rem; }
+    ul { padding-left: 1.4rem; }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.9rem 1rem;
+      overflow-x: auto;
+      font-size: 0.9rem;
+    }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    strong { font-weight: 650; }
+  </style>
+</head>
+<body>
+  <h1>国际物流单证录入智能体原型设计</h1>
+
+  <h2>1. 背景设定</h2>
+  <p>我们是国际物流公司。操作人员每天收到大量邮件，类似 <strong>BKG.pdf</strong> 的出口货物托运单。</p>
+  <p>我们需要一个 <strong>“单证录入智能体原型”</strong>，它能读取该 PDF 内容，<strong>自动提取关键信息</strong>，并进行 <strong>业务校验</strong>，最终以 <strong>HTML / Vue 页面</strong> 的形式展现解析与校验结果。</p>
+
+  <h2>2. 核心要求（必做项）</h2>
+  <p>请使用 <strong>Python + FastAPI</strong> 完成以下任务：</p>
+
+  <h3>1) 多模态/非结构化数据解析</h3>
+  <p>读取 BKG.pdf 文件，提取以下字段并输出结构化的 JSON。</p>
+
+  <h4>必填字段（源数据中有直接对应关系）</h4>
+  <table>
+    <thead>
+      <tr><th>序号</th><th>字段名（JSON Key）</th><th>说明</th><th>样例值</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>1</td><td>shipper</td><td>发货人</td><td>Guangzhou Great Power Energy (Qingdao) Co., Ltd.</td></tr>
+      <tr><td>2</td><td>consignee</td><td>收货人</td><td>GREAT POWER NEW ENERGY CO., LTD</td></tr>
+      <tr><td>3</td><td>notify_party</td><td>通知方</td><td>COASTING INT'L LOGISTICS CO., LTD.</td></tr>
+      <tr><td>4</td><td>vessel</td><td>船名</td><td>MSC</td></tr>
+      <tr><td>5</td><td>voyage</td><td>航次</td><td>若提取不到可为空字符串</td></tr>
+      <tr><td>6</td><td>port_of_loading</td><td>装货港</td><td>QINGDAO –CNTAO</td></tr>
+      <tr><td>7</td><td>port_of_discharge</td><td>目的港</td><td>NHAVA SHEVA -- INNSA</td></tr>
+      <tr><td>8</td><td>containers</td><td>箱型/箱量</td><td>[{"type": "40HQ", "qty": 1}]</td></tr>
+      <tr><td>9</td><td>packages_qty</td><td>件数（纯数字）</td><td>160</td></tr>
+      <tr><td>10</td><td>packages_unit</td><td>包装单位</td><td>CTNS</td></tr>
+      <tr><td>11</td><td>Cargo</td><td>品名(英文)</td><td>Rechargeable Li-ion Cell</td></tr>
+      <tr><td>12</td><td>gross_weight</td><td>毛重（纯数字）</td><td>25600</td></tr>
+      <tr><td>13</td><td>weight_unit</td><td>重量单位</td><td>KGS</td></tr>
+      <tr><td>14</td><td>measurement</td><td>体积（纯数字）</td><td>32.03</td></tr>
+      <tr><td>15</td><td>measurement_unit</td><td>体积单位</td><td>CBM</td></tr>
+    </tbody>
+  </table>
+
+  <h4>扩展字段（若源数据中无直接对应，留空即可）</h4>
+  <table>
+    <thead>
+      <tr><th>序号</th><th>字段名</th><th>说明</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>16</td><td>hs_code</td><td>HS CODE（可为空）</td></tr>
+      <tr><td>17</td><td>marks</td><td>唛头（可为空）</td></tr>
+      <tr><td>18</td><td>freight</td><td>付费方式（P/C/E，可为空）</td></tr>
+    </tbody>
+  </table>
+
+  <h4>期望格式</h4>
+  <pre><code>{
+  "shipper": "string",
+  "consignee": "string",
+  "notify_party": "string",
+  "vessel": "string",
+  "voyage": "string",
+  "port_of_loading": "string",
+  "port_of_discharge": "string",
+  "containers": [{"type": "string", "qty": "integer"}],
+  "packages_qty": "integer",
+  "packages_unit": "string",
+  "goods_desc": "string",
+  "gross_weight": "number",
+  "weight_unit": "string",
+  "measurement": "number",
+  "measurement_unit": "string",
+  "hs_code": "string",
+  "marks": "string",
+  "freight": "string"
+}</code></pre>
+
+  <h3>2) 业务规则校验与数据治理</h3>
+  <p>物流单证录入对数据准确性要求极高，绝不允许编造或错误录入。请针对提取的数据，设计一套 <strong>分层校验与治理</strong>，至少包含以下标准层次：</p>
+  <ol class="layer-list">
+    <li><strong>输入验证与标准化层</strong>：说明如何清洗 OCR/PDF 提取的原始文本，统一字符编码与格式；</li>
+    <li><strong>结构化输出控制层</strong>：说明如何确保 LLM 或解析模块输出符合固定 JSON；</li>
+    <li><strong>业务规则引擎校验层</strong>：至少实现 <strong>3 条</strong> 确定性校验规则（逻辑勾稽、阈值判断、跨字段比对）；</li>
+    <li><strong>人机协同与置信度评估层</strong>：说明当校验不通过或置信度低于阈值时，系统如何优雅降级并触发人工介入；</li>
+    <li><strong>持续评估与回归测试机制</strong>：说明如何将人工修正的 bad case 自动转化为测试用例，防止准确率回退。</li>
+  </ol>
+  <p>最终输出应包含：</p>
+  <ul>
+    <li><code>raw_extracted_data</code>（原始提取数据）</li>
+    <li><code>validated_data</code>（经校验清洗后的可信数据）</li>
+    <li><code>validation_report</code>（校验报告，包含字段级校验结果、置信度评分、建议操作）</li>
+  </ul>
+
+  <h3>3) MCP 工具化封装（若不了解 MCP，也可以封装普通 API）</h3>
+  <ul>
+    <li>将上述解析 + 校验能力封装为一个 <strong>MCP 风格的 Tool</strong>（即一个独立的 API 接口 <code>/api/parse_booking</code>）。</li>
+    <li>入参：<code>file_path</code> 或 <code>base64_pdf</code>。</li>
+    <li>出参：包含原始提取数据、标准化校验数据、校验报告。</li>
+  </ul>
+
+  <h3>4) Agent 工作流编排设计（输出设计图/文本描述）</h3>
+  <p>请用文字 + 流程图描述：如果你将上述 Tool 交给 LLM Agent（如：LangGraph），如何设计一个“人机协同”的工作流？</p>
+  <p>主要内容包括：</p>
+  <ul>
+    <li>场景：Agent 执行后发现 FAIL（比如毛重缺失），Agent 是直接拒绝？还是反问操作员？还是去查询历史数据补全？</li>
+    <li>请画出 <strong>状态</strong> 或 <strong>节点流转图</strong>（意图识别 → 工具调用 → 校验网关 → 人工兜底）。</li>
+    <li>设计原则说明（确定与 LLM 概率的工程边界，如果发生冲突时如何处理）。</li>
+  </ul>
+
+  <h2>3. 进阶挑战（选做）</h2>
+  <ul>
+    <li><strong>A. 动态指令遵循</strong>：操作员可能说“帮我把毛重单位从 KGS 换成 TON”。请展示如何通过自然语言修改已录入的数据（体现 Function Calling 的修改逻辑）。</li>
+    <li><strong>B. 可观测性埋点</strong>：为上述 API 增加一个简单的日志装饰器，记录每次调用提取的 <strong>耗时</strong> 和 <strong>字段置信度</strong>（如果使用了 LLM 提取的话）。</li>
+  </ul>
+
+  <h2>现场演示要求</h2>
+  <ol class="demo-list">
+    <li>从收到试题之日起，7 个工作日内完成 Demo 制作。</li>
+    <li>完成后随时与人力联系，预约现场演示时间。</li>
+    <li>请自带笔记本电脑，提前配置好运行环境（Python 虚拟环境、依赖已安装、测试文件已放入工程目录）。</li>
+    <li>请准备一份 <strong>PPT / Markdown 文稿</strong>（不限格式，主要包括：架构设计图、核心逻辑说明、准确率提升方案），<strong>可运行的原型</strong>（<strong>不必是完整产品，但核心链路需可演示</strong>）。</li>
+  </ol>
+</body>
+</html>
