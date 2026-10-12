@@ -1,0 +1,12 @@
+{
+  "ports": [
+    {"name": "QINGDAO", "code": "CNTAO", "aliases": ["QING DAO", "TSINGTAO"]},
+    {"name": "NHAVA SHEVA", "code": "INNSA", "aliases": ["JAWAHARLAL NEHRU", "JNPT"]},
+    {"name": "SHANGHAI", "code": "CNSHA", "aliases": []},
+    {"name": "NINGBO", "code": "CNNGB", "aliases": []},
+    {"name": "SINGAPORE", "code": "SGSIN", "aliases": []},
+    {"name": "BUSAN", "code": "KRPUS", "aliases": []},
+    {"name": "ROTTERDAM", "code": "NLRTM", "aliases": []},
+    {"name": "LOS ANGELES", "code": "USLAX", "aliases": ["LA"]}
+  ]
+}

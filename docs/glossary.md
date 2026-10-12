@@ -14,8 +14,9 @@
 | 装货港 | port_of_loading、POL | 起运港；港名与代码可写在同一字段 |
 | 目的港 / 卸货港 | port_of_discharge、POD | 卸货港；同上 |
 | 港口代码 | UN/LOCODE 等 | 如 CNTAO、INNSA；可与港名一并做港口白名单 |
-| 箱型/箱量 | containers | 业务字段：`[{type, qty}]`，如 40HQ × 1（≠ 录入容器） |
-| 录入容器 | entry_container / booking_record | 一票会话的外层数据包：三件套 + meta + history |
+| 箱型/箱量 | containers | 业务字段：`[{type, qty}]`，如 40HQ × 1（≠ BookingRecord） |
+| 订舱业务数据 | BookingData | 一票托运单的业务字段快照（FLD-01～18） |
+| 订舱记录 | BookingRecord | 一票会话的外层数据包：三件套 + meta + history + 状态（旧称「录入容器」） |
 | 字段来源元数据 | meta | 各字段来源；默认 `llm`，人改后为 `human` 等 |
 | 过程历史 | history | 本票解析/校验/编辑/提交等事件流水，便于追踪 |
 | 件数 / 包装单位 | packages_qty / packages_unit | 如 160 CTNS |

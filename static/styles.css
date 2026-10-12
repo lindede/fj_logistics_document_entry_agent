@@ -1,0 +1,201 @@
+:root {
+  --bg: #f3f1ec;
+  --ink: #1c1b19;
+  --muted: #6b6560;
+  --line: #cfc8bd;
+  --accent: #0f5c4c;
+  --warn: #9a6b12;
+  --fail: #9b2c2c;
+  --card: #fffcf7;
+  --mono: "IBM Plex Mono", "SF Mono", Menlo, monospace;
+  --sans: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  height: 100%;
+  font-family: var(--sans);
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 10% 0%, #fff8e8 0%, transparent 40%),
+    linear-gradient(180deg, #efe9df, var(--bg));
+}
+
+.app {
+  max-width: 960px;
+  margin: 0 auto;
+  min-height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 20px 20px 12px;
+  gap: 16px;
+}
+
+.top {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+}
+.brand {
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 14px;
+}
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  justify-content: space-between;
+}
+.step {
+  flex: 1;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+  position: relative;
+}
+.step::before {
+  content: "";
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin: 0 auto 8px;
+  background: var(--line);
+}
+.step.active { color: var(--accent); font-weight: 650; }
+.step.active::before { background: var(--accent); box-shadow: 0 0 0 4px rgba(15,92,76,.15); }
+.step.done::before { background: var(--accent); }
+.stepper-line {
+  position: absolute;
+  left: 0; right: 0; top: 20px;
+  height: 1px;
+  background: var(--line);
+  z-index: -1;
+}
+
+.main {
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+  border-radius: 18px;
+  padding: 28px;
+  min-height: 420px;
+  box-shadow: 0 10px 40px rgba(40, 30, 10, 0.04);
+}
+.hint {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 36em;
+}
+.hint strong { color: var(--ink); }
+.loading {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--muted);
+}
+.spinner {
+  width: 28px; height: 28px;
+  border: 2px solid var(--line);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 20px;
+}
+@media (max-width: 800px) {
+  .grid { grid-template-columns: 1fr; }
+}
+.fields { display: grid; gap: 8px; }
+.field-row {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+  align-items: center;
+  font-size: 14px;
+}
+.field-row label { color: var(--muted); }
+.field-row input, .field-row textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.report {
+  border-left: 1px solid var(--line);
+  padding-left: 18px;
+  font-size: 13px;
+}
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.badge.PASS { background: #d7efe7; color: var(--accent); }
+.badge.WARN { background: #fff1cc; color: var(--warn); }
+.badge.FAIL { background: #f8d6d6; color: var(--fail); }
+.issue {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+.actions { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+button, .btn {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font: inherit;
+  cursor: pointer;
+  background: var(--accent);
+  color: white;
+}
+button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+button.danger { background: var(--fail); }
+
+.composer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--line);
+  background: #fff;
+  border-radius: 14px;
+  padding: 8px 10px;
+  min-height: 52px;
+}
+.composer.drag { outline: 2px dashed var(--accent); }
+.composer input[type="text"] {
+  flex: 1;
+  border: 0;
+  outline: none;
+  font: inherit;
+  background: transparent;
+}
+.composer input[type="file"] { display: none; }
+.msg {
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  min-height: 1.2em;
+}
+.history {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  max-height: 120px;
+  overflow: auto;
+  font-family: var(--mono);
+}

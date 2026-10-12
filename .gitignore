@@ -19,3 +19,7 @@ build/
 *.egg-info/
 .coverage
 htmlcov/
+data/store/
+data/feedback/
+!data/store/.gitkeep
+!data/feedback/.gitkeep

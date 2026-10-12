@@ -26,7 +26,7 @@
 | 1.3 | 解析：PDF 文本层 + **LLM 抽取**（可配置后端接口预留）；单据类型粗判 | M-PAR | PAR-01～04、BG-01 |
 | 1.4 | 结构补齐：按 FLD 补全 key，缺省 `null` | M-PAR / M-VAL | VAL-04、FLD-* |
 | 1.5 | 校验：结构检查 + **至少 3 条 BR**（建议 BR-01/02/04 先落地）+ report | M-VAL | VAL-05/08、BR-* |
-| 1.6 | 录入容器雏形：三件套 + `meta`（默认 llm）+ `history`（关键节点追加） | M-AGT | DATA-01～03、VAL-08 |
+| 1.6 | BookingRecord 雏形：三件套 + `meta`（默认 llm）+ `history`（关键节点追加） | M-AGT | DATA-01～03、VAL-08 |
 | 1.7 | 会话状态机最小集：Idle → Parsing → Validating → AwaitConfirm/Human → 提交/作废回 Idle | M-AGT | AGT-02/05、flow |
 | 1.8 | 前端架子：顶进度 + 中区 + 底栏拖 PDF/指令；四态可切换展示 | M-FE | BG-03、ui_design |
 | 1.9 | 人工改字段 → 再调校验（同一 Validating） | M-FE、M-VAL、M-AGT | UC-02 |

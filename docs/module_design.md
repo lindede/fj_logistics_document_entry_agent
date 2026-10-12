@@ -142,7 +142,7 @@
 | 读 `validation_report` 分流（校验网关） | 初抽后不在 Agent 内重跑第二套规则引擎 |
 | 单据会话：开始/结束/新单；同时一票 | — |
 | 提交策略（`manual` / `auto_on_pass`，默认人工） | 见 AGT-06、flow_design |
-| 维护录入容器：`meta`（字段来源）、`history`（过程轨迹） | 见 DATA-01～03；默认来源 llm |
+| 维护 BookingRecord（订舱记录）：`meta`（字段来源）、`history`（过程轨迹） | 见 DATA-01～03；默认来源 llm |
 | 人工兜底、改数后再调 M-VAL | — |
 
 意图与工具调用分开：

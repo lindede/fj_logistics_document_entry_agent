@@ -1,0 +1,20 @@
+{
+  "shipper": "Guangzhou Great PowerEnergy (Qingdao) Co., Ltd.",
+  "consignee": "GREAT POWER NEW ENERGY CO., LTD",
+  "notify_party": "COASTING INT'L LOGISTICS CO., LTD.",
+  "vessel": "MSC",
+  "voyage": "",
+  "port_of_loading": "QINGDAO",
+  "port_of_discharge": "NHAVA SHEVA",
+  "containers": [{"type": "40HQ", "qty": 1}],
+  "packages_qty": 160,
+  "packages_unit": "CTNS",
+  "goods_desc": "Rechargeable Li-ion Cell",
+  "gross_weight": 25600,
+  "weight_unit": "KGS",
+  "measurement": 32.03,
+  "measurement_unit": "CBM",
+  "hs_code": null,
+  "marks": null,
+  "freight": null
+}

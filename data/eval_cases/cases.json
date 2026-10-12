@@ -1,0 +1,69 @@
+[
+  {
+    "id": "gold_pass",
+    "file": "data/samples/BKG.pdf",
+    "expect_overall": ["PASS", "WARN"],
+    "gold": "data/gold/bkg_sample.json"
+  },
+  {
+    "id": "fail_same_ports",
+    "file": "data/samples/BKG_fail_same_ports.pdf",
+    "expect_overall": ["FAIL"],
+    "expect_rules": ["BR-01"]
+  },
+  {
+    "id": "not_booking",
+    "file": "data/samples/not_booking.pdf",
+    "expect_doc_type_ok": false
+  },
+  {
+    "id": "warn_unknown_vessel",
+    "inline": {
+      "shipper": "A Co",
+      "consignee": "B Co",
+      "notify_party": "C Co",
+      "vessel": "UNKNOWN SHIP",
+      "voyage": "",
+      "port_of_loading": "QINGDAO CNTAO",
+      "port_of_discharge": "NHAVA SHEVA INNSA",
+      "containers": [{"type": "40HQ", "qty": 1}],
+      "packages_qty": 10,
+      "packages_unit": "CTNS",
+      "goods_desc": "Goods",
+      "gross_weight": 1000,
+      "weight_unit": "KGS",
+      "measurement": 10,
+      "measurement_unit": "CBM",
+      "hs_code": null,
+      "marks": null,
+      "freight": null
+    },
+    "expect_overall": ["WARN"],
+    "expect_rules": ["BR-03"]
+  },
+  {
+    "id": "fail_weight_range",
+    "inline": {
+      "shipper": "A Co",
+      "consignee": "B Co",
+      "notify_party": "C Co",
+      "vessel": "MSC",
+      "voyage": "",
+      "port_of_loading": "QINGDAO CNTAO",
+      "port_of_discharge": "NHAVA SHEVA INNSA",
+      "containers": [{"type": "40HQ", "qty": 1}],
+      "packages_qty": 10,
+      "packages_unit": "CTNS",
+      "goods_desc": "Goods",
+      "gross_weight": 999999,
+      "weight_unit": "KGS",
+      "measurement": 10,
+      "measurement_unit": "CBM",
+      "hs_code": null,
+      "marks": null,
+      "freight": null
+    },
+    "expect_overall": ["FAIL"],
+    "expect_rules": ["BR-02"]
+  }
+]

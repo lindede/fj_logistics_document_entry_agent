@@ -69,22 +69,22 @@
 | VAL-05 | ③ 业务规则引擎 ≥3 条 | 确定性规则见 BR-* | P0 | |
 | VAL-06 | ④ 人机协同与置信度 | FAIL/低置信度 → 人工；不静默成功 | P0 | 置信度细节见 ADV-02 |
 | VAL-07 | ⑤ bad case → 回归用例 | 人工改过的错例可沉淀再跑 | P1 | |
-| VAL-08 | 输出 raw / validated / report | 一次解析必须带齐三件套；report 含字段结果、置信度、建议操作 | P0 | 与 API-03 一致；会话内再包进录入容器（DATA-01） |
+| VAL-08 | 输出 raw / validated / report | 一次解析必须带齐三件套；report 含字段结果、置信度、建议操作 | P0 | 与 API-03 一致；会话内再包进 BookingRecord（DATA-01） |
 
 **录入过程数据容器（澄清，便于全程追踪）**
 
 | 编号 | 要点 | 我方理解 | 优先级 | 实现注意 |
 | --- | --- | --- | --- | --- |
-| DATA-01 | 会话/票数据外层容器 | 一票进行中的数据放在统一 **container**（录入容器）里，除三件套外含 `meta`、`history` | P0 | 与业务字段 `containers`（箱型箱量）不是同一概念 |
+| DATA-01 | 会话/票数据外层记录 | 一票进行中的数据放在统一 **BookingRecord**（订舱记录）里，除三件套外含 `meta`、`history` | P0 | 与业务字段 `containers`（箱型箱量）不是同一概念 |
 | DATA-02 | meta：字段来源 | `meta` 描述各字段来源；未标明时**默认 `llm`**（LLM 识别） | P0 | 人改后标 `human`；结构补齐产生的空位可标 `schema`/`system`；系统自动提交等可标 `system` |
 | DATA-03 | history：编辑/过程历史 | 记录本票从开票到提交/作废的关键过程（解析、校验、改字段、提交等） | P0 | 按时间追加；至少含时间、动作、操作者（llm/human/system）、变更摘要 |
 
-容器形态（示意，非最终字段全集）：
+BookingRecord 形态（示意，非最终字段全集）：
 
 ```text
-entry_container / booking_record
+BookingRecord
 ├── session_id / status          # 会话状态
-├── raw_extracted_data           # 三件套
+├── raw_extracted_data           # 三件套（业务字段层对应 BookingData）
 ├── validated_data
 ├── validation_report
 ├── meta
