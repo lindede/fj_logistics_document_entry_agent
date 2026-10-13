@@ -9,6 +9,7 @@ from app.agent.session import session_manager
 from app.config import SUBMIT_STRATEGY
 from app.models import ParseBookingRequest, SessionActionRequest
 from app.observe import timed
+from app.validate.schema_check import load_booking_schema
 
 router = APIRouter(prefix="/api")
 
@@ -20,19 +21,16 @@ class StrategyBody(BaseModel):
 @router.post("/parse_booking")
 @timed("api_parse_booking")
 def parse_booking(body: ParseBookingRequest) -> dict[str, Any]:
+    """HTTP 扁平三件套：由 BookingRecord 投影，不另写一套解析逻辑。"""
+    from app.booking import process_booking, triple_from_record
+
     try:
-        result = session_manager.parse_and_validate(body.file_path, body.base64_pdf)
+        record = process_booking(file_path=body.file_path, base64_pdf=body.base64_pdf)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {
-        "raw_extracted_data": result["raw_extracted_data"],
-        "validated_data": result["validated_data"],
-        "validation_report": result["validation_report"],
-        "doc_type_ok": result.get("doc_type_ok", True),
-        "elapsed_ms": result.get("elapsed_ms", 0),
-    }
+    return triple_from_record(record)
 
 
 @router.get("/session")
@@ -84,9 +82,16 @@ def health() -> dict[str, str]:
     return {"status": "ok", "submit_strategy": SUBMIT_STRATEGY}
 
 
+@router.get("/schemas/booking_data")
+def get_booking_data_schema() -> dict[str, Any]:
+    """供前端/联调读取业务字段 JSON Schema（HTTP 出参契约另议）。"""
+    return load_booking_schema()
+
+
 @router.get("/mcp/tools")
 def mcp_tools() -> dict[str, Any]:
     """MCP 风格 Tool 描述（与 HTTP 共用核心）。"""
+    booking_schema = load_booking_schema()
     return {
         "tools": [
             {
@@ -98,6 +103,20 @@ def mcp_tools() -> dict[str, Any]:
                         "file_path": {"type": "string"},
                         "base64_pdf": {"type": "string"},
                     },
+                },
+                "output_schema": {
+                    "type": "object",
+                    "properties": {
+                        "raw_extracted_data": booking_schema,
+                        "validated_data": booking_schema,
+                        "validation_report": {"type": "object"},
+                        "doc_type_ok": {"type": "boolean"},
+                    },
+                    "required": [
+                        "raw_extracted_data",
+                        "validated_data",
+                        "validation_report",
+                    ],
                 },
                 "endpoint": "/api/parse_booking",
             }

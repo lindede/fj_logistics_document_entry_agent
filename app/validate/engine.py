@@ -5,7 +5,6 @@ from typing import Any
 
 from app.config import CONFIDENCE_THRESHOLD
 from app.models import FieldIssue, ValidationReport
-from app.parse.schema_fill import fill_schema
 from app.validate import rules
 
 
@@ -30,15 +29,13 @@ def validate_booking(
     raw: dict[str, Any],
     field_confidence: dict[str, float] | None = None,
 ) -> tuple[dict[str, Any], ValidationReport]:
-    data = fill_schema(raw)
-    # 清洗：扩展字段空串→null
-    for key in ("hs_code", "marks", "freight"):
-        if data.get(key) == "":
-            data[key] = None
-    if isinstance(data.get("voyage"), str):
-        data["voyage"] = data["voyage"].strip()
+    """只校验、不补齐字段。FLD key 补全应在解析侧 `fill_schema` 完成。"""
+    data = deepcopy(raw or {})
 
     issues: list[FieldIssue] = []
+    from app.validate.schema_check import check_schema
+
+    issues.extend(check_schema(data))
     issues.extend(rules.check_structure(data))
     issues.extend(rules.br_01_ports_differ(data))
     issues.extend(rules.br_02_ranges(data))
@@ -70,4 +67,5 @@ def validate_booking(
         suggested_action=_suggested(overall),
         low_confidence_fields=low,
     )
-    return deepcopy(data), report
+    # 原样返回输入副本（不做 schema 补全）
+    return data, report

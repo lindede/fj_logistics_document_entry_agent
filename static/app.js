@@ -1,27 +1,55 @@
-const KEY_FIELDS = [
-  ["shipper", "发货人"],
-  ["consignee", "收货人"],
-  ["notify_party", "通知方"],
-  ["vessel", "船名"],
-  ["voyage", "航次"],
-  ["port_of_loading", "装货港"],
-  ["port_of_discharge", "目的港"],
-  ["packages_qty", "件数"],
-  ["packages_unit", "包装单位"],
-  ["goods_desc", "品名"],
-  ["gross_weight", "毛重"],
-  ["weight_unit", "重量单位"],
-  ["measurement", "体积"],
-  ["measurement_unit", "体积单位"],
-];
+/** 中文标签（key 顺序以 /api/schemas/booking_data 为准） */
+const FIELD_LABELS = {
+  shipper: "发货人",
+  consignee: "收货人",
+  notify_party: "通知方",
+  vessel: "船名",
+  voyage: "航次",
+  port_of_loading: "装货港",
+  port_of_discharge: "目的港",
+  containers: "箱型箱量",
+  packages_qty: "件数",
+  packages_unit: "包装单位",
+  goods_desc: "品名",
+  gross_weight: "毛重",
+  weight_unit: "重量单位",
+  measurement: "体积",
+  measurement_unit: "体积单位",
+  hs_code: "HS CODE",
+  marks: "唛头",
+  freight: "运费条款",
+};
+
+/** fallback：schema 未加载时仍可展示 */
+let KEY_FIELDS = Object.keys(FIELD_LABELS)
+  .filter((k) => k !== "containers")
+  .map((k) => [k, FIELD_LABELS[k]]);
 
 let state = { status: "Idle" };
+
+async function loadBookingSchema() {
+  try {
+    const schema = await api("/api/schemas/booking_data");
+    const keys = Object.keys(schema.properties || {});
+    KEY_FIELDS = keys.map((k) => [k, FIELD_LABELS[k] || k]);
+  } catch (_) {
+    /* 保留 fallback */
+  }
+}
 
 async function api(path, opts) {
   const res = await fetch(path, opts);
   if (!res.ok) {
-    const t = await res.text();
-    throw new Error(t || res.statusText);
+    let detail = res.statusText;
+    try {
+      const body = await res.json();
+      detail = body.detail || JSON.stringify(body);
+    } catch (_) {
+      try {
+        detail = await res.text();
+      } catch (_) {}
+    }
+    throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
   }
   return res.json();
 }
@@ -115,6 +143,12 @@ function renderResult(s) {
   <p class="msg">${esc(s.message || "")}</p>`;
 }
 
+function setReplaceModal(open) {
+  const modal = document.getElementById("replace-modal");
+  if (!modal) return;
+  modal.hidden = !open;
+}
+
 function render(s, justDone = false) {
   state = s;
   paintStepper(s.status || "Idle", justDone);
@@ -125,6 +159,7 @@ function render(s, justDone = false) {
   else main.innerHTML = renderResult(s);
 
   document.getElementById("msg").textContent = s.message || "";
+  setReplaceModal(Boolean(s.replace_pending));
 
   const re = document.getElementById("btn-revalidate");
   const sub = document.getElementById("btn-submit");
@@ -134,20 +169,37 @@ function render(s, justDone = false) {
   if (vo) vo.onclick = () => act({ action: "void" });
 }
 
+function showError(err) {
+  const msg = err?.message || String(err);
+  document.getElementById("msg").textContent = `出错：${msg}`;
+  const main = document.getElementById("main");
+  main.innerHTML = `<div class="hint"><p><strong>请求失败</strong></p><p>${esc(msg)}</p>
+    <p>常见原因：大模型限流(429)、网络超时。可稍后重试，或先点「作废」清空会话。</p>
+    <div class="actions"><button id="btn-retry-refresh" type="button">刷新状态</button></div></div>`;
+  const b = document.getElementById("btn-retry-refresh");
+  if (b) b.onclick = () => refresh().catch((e) => showError(e));
+}
+
 async function refresh() {
   const s = await api("/api/session");
   render(s);
 }
 
 async function act(body) {
-  const s = await api("/api/session/action", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const done = (body.action === "submit" || /已提交|已自动提交/.test(s.message || "")) && s.status === "Idle";
-  render(s, done);
-  if (done) setTimeout(refresh, 1200);
+  try {
+    const s = await api("/api/session/action", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const done =
+      (body.action === "submit" || /已提交|已自动提交/.test(s.message || "")) &&
+      s.status === "Idle";
+    render(s, done);
+    if (done) setTimeout(() => refresh().catch(() => {}), 1200);
+  } catch (err) {
+    showError(err);
+  }
 }
 
 async function saveAndRevalidate() {
@@ -170,9 +222,41 @@ async function saveAndRevalidate() {
 async function uploadFile(file) {
   const fd = new FormData();
   fd.append("file", file);
-  render({ status: "Parsing", filename: file.name, message: "上传并解析…" });
-  const s = await api("/api/session/upload", { method: "POST", body: fd });
-  render(s);
+  render({
+    status: "Parsing",
+    filename: file.name,
+    message: "上传并调用大模型解析中（约 10–60 秒；遇限流会自动重试）…",
+  });
+  try {
+    const s = await api("/api/session/upload", { method: "POST", body: fd });
+    render(s);
+  } catch (err) {
+    showError(err);
+  }
+}
+
+function bindReplaceModal() {
+  const confirmBtn = document.getElementById("modal-confirm-replace");
+  const cancelBtn = document.getElementById("modal-cancel-replace");
+  const backdrop = document.querySelector("#replace-modal [data-modal-cancel]");
+  if (confirmBtn) {
+    confirmBtn.onclick = () => {
+      setReplaceModal(false);
+      render({
+        ...state,
+        replace_pending: false,
+        status: "Parsing",
+        message: "已确认换票，正在解析新 PDF…",
+      });
+      act({ action: "confirm_replace" });
+    };
+  }
+  const cancel = () => act({ action: "cancel_replace" });
+  if (cancelBtn) cancelBtn.onclick = cancel;
+  if (backdrop) backdrop.onclick = cancel;
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && state.replace_pending) cancel();
+  });
 }
 
 function bindComposer() {
@@ -182,7 +266,10 @@ function bindComposer() {
   const send = document.getElementById("send");
 
   file.addEventListener("change", () => {
-    if (file.files?.[0]) uploadFile(file.files[0]);
+    if (file.files?.[0]) {
+      uploadFile(file.files[0]);
+      file.value = "";
+    }
   });
   send.addEventListener("click", async () => {
     const text = cmd.value.trim();
@@ -212,7 +299,10 @@ function bindComposer() {
   });
 }
 
+bindReplaceModal();
 bindComposer();
-refresh().catch((e) => {
-  document.getElementById("main").innerHTML = `<div class="hint">后端未就绪：${esc(e.message)}</div>`;
-});
+loadBookingSchema()
+  .then(() => refresh())
+  .catch((e) => {
+    document.getElementById("main").innerHTML = `<div class="hint">后端未就绪：${esc(e.message)}</div>`;
+  });

@@ -23,6 +23,18 @@
 
     <main class="main" id="main"></main>
 
+    <div id="replace-modal" class="modal" hidden>
+      <div class="modal-backdrop" data-modal-cancel></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="replace-modal-title">
+        <h2 id="replace-modal-title">确认换票？</h2>
+        <p>当前已有进行中的单据。换票将作废当前票并解析新上传的 PDF。</p>
+        <div class="modal-actions">
+          <button type="button" class="secondary" id="modal-cancel-replace">取消</button>
+          <button type="button" id="modal-confirm-replace">确认换票</button>
+        </div>
+      </div>
+    </div>
+
     <footer>
       <div class="composer" id="composer">
         <label class="btn secondary" for="file">PDF</label>

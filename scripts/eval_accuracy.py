@@ -69,6 +69,12 @@ def main() -> int:
             if not set(case["expect_rules"]).issubset(rules):
                 case_ok = False
 
+        schema_fail = any(i.rule == "STRUCT-SCHEMA" for i in report.issues)
+        if case.get("expect_schema_ok") is True and schema_fail:
+            case_ok = False
+        if case.get("expect_schema_ok") is False and not schema_fail:
+            case_ok = False
+
         acc = None
         if case.get("gold"):
             gold = json.loads((ROOT / case["gold"]).read_text(encoding="utf-8"))
@@ -82,11 +88,19 @@ def main() -> int:
                     "overall": report.overall,
                     "accuracy": round(acc, 4),
                     "miss": miss,
+                    "schema_ok": not schema_fail,
                     "ok": case_ok,
                 }
             )
         else:
-            rows.append({"id": cid, "overall": report.overall, "ok": case_ok})
+            rows.append(
+                {
+                    "id": cid,
+                    "overall": report.overall,
+                    "schema_ok": not schema_fail,
+                    "ok": case_ok,
+                }
+            )
 
         if case_ok:
             ok_cases += 1
@@ -96,7 +110,7 @@ def main() -> int:
         "case_pass": f"{ok_cases}/{len(cases)}",
         "field_accuracy": None if field_acc is None else round(field_acc, 4),
         "rows": rows,
-        "notes": "baseline after heuristic extractor + few-shot labels in sample PDF",
+        "notes": "baseline with multimodal LLM (or inline/fixture cases)",
     }
     out_path = ROOT / "docs" / "eval_baseline.md"
     md = [
@@ -115,7 +129,7 @@ def main() -> int:
         "",
         "| 轮次 | 改动 | 字段准确率 |",
         "| --- | --- | --- |",
-        "| R0 | 初版启发式标签抽取 | 见上 |",
+        "| R0 | 多模态 LLM 抽取基线 | 见上 |",
         "| R1 | 样例 PDF 标签对齐 + Cargo→goods_desc + 少数字段提示 | 期望 ≥ R0 |",
         "",
     ]

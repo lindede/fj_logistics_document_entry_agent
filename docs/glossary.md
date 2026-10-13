@@ -39,6 +39,7 @@
 | 校验网关 | validation gateway | Agent 读报告做分流，不是再跑一套检测 |
 | 人工兜底 | human-in-the-loop | FAIL/低置信度时交操作员确认或修改 |
 | 单据会话 | booking session | 一票单的开始/进行中/结束；同时仅一票 |
+| 会话 ID | session_id | 一票唯一标识；**同时**作为 LangGraph `thread_id`（仅在 `_cfg` 映射）。禁止另维护第二套 ID |
 | MCP Tool | Model Context Protocol Tool | 优先封装形态；可与 HTTP API 并存 |
 | 解析接口 | `/api/parse_booking` | 解析+校验一体的 HTTP 形态 |
 | 多模态 / 非结构化 | multimodal / unstructured | 版式不固定的文档；文本层优先，必要时 OCR/视觉 |

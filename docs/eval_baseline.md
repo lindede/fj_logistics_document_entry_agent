@@ -38,7 +38,7 @@
       "ok": true
     }
   ],
-  "notes": "baseline after heuristic extractor + few-shot labels in sample PDF"
+  "notes": "baseline with multimodal LLM (or inline/fixture cases)"
 }
 ```
 
@@ -46,5 +46,5 @@
 
 | 轮次 | 改动 | 字段准确率 |
 | --- | --- | --- |
-| R0 | 初版启发式标签抽取 | 见上 |
+| R0 | 多模态 LLM 抽取基线 | 见上 |
 | R1 | 样例 PDF 标签对齐 + Cargo→goods_desc + 少数字段提示 | 期望 ≥ R0 |

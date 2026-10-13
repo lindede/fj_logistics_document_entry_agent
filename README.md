@@ -14,7 +14,7 @@ uvicorn app.main:app --reload --port 8000
 
 浏览器打开 [http://127.0.0.1:8000](http://127.0.0.1:8000)。
 
-样例 PDF：`data/samples/BKG.pdf`（从需求 Word 附件 `oleObject1.bin` 抽出的官方托运单；合成标签版留作 `BKG_synthetic_labeled.pdf`）。
+样例 PDF：`data/samples/BKG.pdf`（从需求 Word 附件抽出的官方托运单）。
 
 ## 验收脚本
 

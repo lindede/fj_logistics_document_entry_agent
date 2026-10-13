@@ -116,6 +116,10 @@ stateDiagram-v2
 
 **意图识别 → 工具调用 → 校验网关 →（人工或自动提交）**。意图与工具分节点。
 
+实现：`app/agent/graph.py` 用 **LangGraph** 收编开票/再验主路径  
+`parse → apply_patches → validate → route`（`MemorySaver`）；  
+意图识别、换票、人点提交/作废仍在 `SessionManager.handle`。
+
 ```mermaid
 flowchart TD
   A[用户动作] --> B[意图识别]

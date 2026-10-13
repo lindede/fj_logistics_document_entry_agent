@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fj-logistics.local/schemas/booking_data.schema.json",
+  "title": "BookingData",
+  "description": "出口托运单抽取字段（FLD-01～18）。必填字段必须有值（非 null）；仅 hs_code/marks/freight 可为 null。业务规则 BR-* 不在此表达。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "shipper",
+    "consignee",
+    "notify_party",
+    "vessel",
+    "voyage",
+    "port_of_loading",
+    "port_of_discharge",
+    "containers",
+    "packages_qty",
+    "packages_unit",
+    "goods_desc",
+    "gross_weight",
+    "weight_unit",
+    "measurement",
+    "measurement_unit",
+    "hs_code",
+    "marks",
+    "freight"
+  ],
+  "properties": {
+    "shipper": { "type": "string", "minLength": 1 },
+    "consignee": { "type": "string", "minLength": 1 },
+    "notify_party": { "type": "string", "minLength": 1 },
+    "vessel": { "type": "string", "minLength": 1 },
+    "voyage": { "type": "string" },
+    "port_of_loading": { "type": "string", "minLength": 1 },
+    "port_of_discharge": { "type": "string", "minLength": 1 },
+    "containers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "qty"],
+        "properties": {
+          "type": { "type": "string", "minLength": 1 },
+          "qty": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "packages_qty": { "type": "integer", "minimum": 1 },
+    "packages_unit": { "type": "string", "minLength": 1 },
+    "goods_desc": { "type": "string", "minLength": 1 },
+    "gross_weight": { "type": "number", "exclusiveMinimum": 0 },
+    "weight_unit": { "type": "string", "minLength": 1 },
+    "measurement": { "type": "number", "exclusiveMinimum": 0 },
+    "measurement_unit": { "type": "string", "minLength": 1 },
+    "hs_code": { "type": ["string", "null"], "minLength": 1 },
+    "marks": { "type": ["string", "null"], "minLength": 1 },
+    "freight": {
+      "type": ["string", "null"],
+      "enum": ["P", "C", "E", null]
+    }
+  }
+}
