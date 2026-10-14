@@ -21,5 +21,9 @@ build/
 htmlcov/
 data/store/
 data/feedback/
+data/debug/
+data/prompt_lab/runs/
 !data/store/.gitkeep
 !data/feedback/.gitkeep
+!data/debug/.gitkeep
+!data/prompt_lab/runs/.gitkeep

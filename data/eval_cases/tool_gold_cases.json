@@ -1,0 +1,96 @@
+[
+  {
+    "id": "bkg_main",
+    "kind": "correct",
+    "file": "data/samples/BKG.pdf",
+    "gold": "data/gold/bkg_sample.json",
+    "expect_overall": ["PASS", "WARN"],
+    "notes": "正确主样例：notify=TENV，vessel=MSC，voyage 空，freight=P"
+  },
+  {
+    "id": "bkg_official",
+    "kind": "correct",
+    "file": "data/samples/BKG_official.pdf",
+    "gold": "data/gold/bkg_sample.json",
+    "expect_overall": ["PASS", "WARN"],
+    "notes": "正确样例（与 BKG 同源金标）"
+  },
+  {
+    "id": "not_booking",
+    "kind": "error_doc_type",
+    "file": "data/samples/not_booking.pdf",
+    "expect_doc_type_ok": false,
+    "notes": "错误：商业发票，不是托运单"
+  },
+  {
+    "id": "not_booking_scan",
+    "kind": "error_doc_type",
+    "file": "data/samples/not_booking_scan.pdf",
+    "expect_doc_type_ok": false,
+    "optional": true,
+    "notes": "错误：扫描版非托运单（门禁偶发漏过，optional 不阻断整套）"
+  },
+  {
+    "id": "fail_same_ports",
+    "kind": "error_rule",
+    "file": "data/samples/BKG_fail_same_ports.pdf",
+    "gold": "data/gold/bkg_fail_same_ports.json",
+    "expect_overall": ["FAIL"],
+    "expect_rules": ["BR-01"],
+    "notes": "错误业务：装港=卸港，应 FAIL + BR-01（金标与合成 PDF 一致，notify 仍为 Coasting）"
+  },
+  {
+    "id": "warn_unknown_vessel_inline",
+    "kind": "error_rule",
+    "inline": {
+      "shipper": "A Co",
+      "consignee": "B Co",
+      "notify_party": "C Co",
+      "vessel": "UNKNOWN SHIP",
+      "voyage": "",
+      "port_of_loading": "QINGDAO CNTAO",
+      "port_of_discharge": "NHAVA SHEVA INNSA",
+      "containers": [{"type": "40HQ", "qty": 1}],
+      "packages_qty": 10,
+      "packages_unit": "CTNS",
+      "goods_desc": "Goods",
+      "gross_weight": 1000,
+      "weight_unit": "KGS",
+      "measurement": 10,
+      "measurement_unit": "CBM",
+      "hs_code": null,
+      "marks": null,
+      "freight": null
+    },
+    "expect_overall": ["WARN"],
+    "expect_rules": ["BR-03"],
+    "notes": "错误/警告：未知船名 → WARN BR-03（不经 PDF，直测校验层）"
+  },
+  {
+    "id": "fail_weight_range_inline",
+    "kind": "error_rule",
+    "inline": {
+      "shipper": "A Co",
+      "consignee": "B Co",
+      "notify_party": "C Co",
+      "vessel": "MSC",
+      "voyage": "",
+      "port_of_loading": "QINGDAO CNTAO",
+      "port_of_discharge": "NHAVA SHEVA INNSA",
+      "containers": [{"type": "40HQ", "qty": 1}],
+      "packages_qty": 10,
+      "packages_unit": "CTNS",
+      "goods_desc": "Goods",
+      "gross_weight": 999999,
+      "weight_unit": "KGS",
+      "measurement": 10,
+      "measurement_unit": "CBM",
+      "hs_code": null,
+      "marks": null,
+      "freight": null
+    },
+    "expect_overall": ["FAIL"],
+    "expect_rules": ["BR-02"],
+    "notes": "错误：毛重超范围 → FAIL BR-02（不经 PDF，直测校验层）"
+  }
+]

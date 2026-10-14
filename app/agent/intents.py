@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import re
 from typing import Any
+
+from app.agent.nl_patch import parse_nl_patches
 
 
 def detect_intent(
@@ -30,53 +31,8 @@ def detect_intent(
     if "开票" in t or "parse" in t or "录入" in t:
         return "open_need_pdf" if not has_pdf else "open_booking"
 
-    # 自然语言改字段
-    if _nl_patch(t):
-        return "nl_patch"
-    if status == "Idle" and _nl_patch(t):
-        return "idle_patch_ask"
-    return "unknown"
-
-
-def _nl_patch(t: str) -> dict[str, Any] | None:
-    """解析简单动态指令，如 KGS→TON / 毛重单位换成 TON。"""
-    # 重量单位
-    m = re.search(
-        r"(毛重)?\s*单位.*(从\s*)?(kgs|kg|ton|mt)\s*(换成|改为|改成|到|->|→)\s*(kgs|kg|ton|mt)",
-        t,
-        re.I,
-    )
-    if m:
-        to_u = m.group(5).upper()
-        if to_u == "KG":
-            to_u = "KGS"
-        return {"weight_unit": to_u, "_convert_weight": True}
-
-    m = re.search(r"(kgs|kg)\s*(->|→|换成|改为)\s*(ton|mt)", t, re.I)
-    if m:
-        return {"weight_unit": m.group(3).upper().replace("MT", "TON"), "_convert_weight": True}
-
-    m = re.search(r"(ton|mt)\s*(->|→|换成|改为)\s*(kgs|kg)", t, re.I)
-    if m:
-        return {"weight_unit": "KGS", "_convert_weight": True}
-
-    m = re.search(r"船名.*(改为|改成|换成)\s*([a-z0-9 \-]+)", t, re.I)
-    if m:
-        return {"vessel": m.group(2).strip().upper()}
-
-    m = re.search(r"(装货港|pol).*(改为|改成|换成)\s*(.+)$", t, re.I)
-    if m:
-        return {"port_of_loading": m.group(3).strip()}
-
-    m = re.search(r"(目的港|卸货港|pod).*(改为|改成|换成)\s*(.+)$", t, re.I)
-    if m:
-        return {"port_of_discharge": m.group(3).strip()}
-
-    return None
-
-
-def parse_nl_patches(text: str) -> dict[str, Any] | None:
-    return _nl_patch((text or "").strip().lower())
+    # 其余自然语言交给 LLM/回退解析（session 里调 parse_nl_patches）
+    return "nl_patch"
 
 
 def apply_weight_unit_conversion(data: dict[str, Any], new_unit: str) -> dict[str, Any]:
@@ -100,3 +56,7 @@ def apply_weight_unit_conversion(data: dict[str, Any], new_unit: str) -> dict[st
             pass
     out["weight_unit"] = new_u
     return out
+
+
+# 兼容旧 import
+__all__ = ["detect_intent", "parse_nl_patches", "apply_weight_unit_conversion"]

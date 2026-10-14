@@ -3,15 +3,15 @@
 ## 架构
 
 ```text
-M-FE(工作台) → M-AGT(Session + LangGraph) → M-PAR(解析) → M-VAL(校验) → M-MD(主数据)
-                ↑                ↑
-              M-GW(/api)      M-OBS(日志耗时/置信度)
+M-FE → Agent(:8000 Session+LangGraph) --HTTP Tool--> Tool(:8001 parse_booking)
+                                              └─ M-PAR → M-VAL → M-MD
 ```
 
-- HTTP：`POST /api/parse_booking`（三件套）
-- MCP 风格：`GET /api/mcp/tools` 描述 Tool，核心与 HTTP 共用
-- 会话：`/api/session`、`/api/session/action`、`/api/session/upload`
-- 编排：`app/agent/graph.py`（LangGraph：`parse → apply_patches → validate → route`）；换票/提交仍由 `SessionManager`
+- 单进程：`APP_ROLE=all`（默认，测试用）
+- 双进程：`APP_ROLE=tool` + `APP_ROLE=agent` 且 `TOOL_BASE_URL=http://127.0.0.1:8001`
+- Tool：`POST /api/parse_booking`；MCP **风格**描述 `GET /api/mcp/tools`（非标准 MCP 协议）
+- Agent：会话 API；开票 `parse` 节点只调 `invoke_parse_booking`（LangChain StructuredTool）
+- `file_path`：本地相对/绝对路径，或 `http(s)` 远程 PDF
 
 ## 核心逻辑
 
@@ -31,7 +31,7 @@ M-FE(工作台) → M-AGT(Session + LangGraph) → M-PAR(解析) → M-VAL(校�
 
 | 项 | 说明 |
 | --- | --- |
-| ADV-01 | 底栏自然语言改单位（KGS→TON）后重验 |
+| ADV-01 | 底栏自然语言改字段：LLM→`ui_patches` **只填表单**；须再点「保存并重验」才进图；无 key/fixture 时正则回退 |
 | ADV-02 | `observe.timed` 记录耗时与字段置信度 |
 | MCP | `/api/mcp/tools` + 共用 `parse_booking` |
 | auto_on_pass | `POST /api/config/submit_strategy` |
@@ -43,6 +43,12 @@ M-FE(工作台) → M-AGT(Session + LangGraph) → M-PAR(解析) → M-VAL(校�
 > **下一步 M4**（见 `docs/dev_plan.md`）：Agent 改为只调封装 Tool 门面；可先同进程验证，再可选拆成 Tool 服务 + Agent 服务。当前 Agent 仍直调 Python 解析/校验实现。
 >
 > **JSON Schema**：`data/schemas/booking_data.schema.json` 为字段单源；已用于 key 派生、`validate`（STRUCT-SCHEMA）、MCP `output_schema`、`GET /api/schemas/booking_data`（前端字段列表）。**HTTP `/api/parse_booking` 出参是否强制再校 schema 另议。**
+
+## 待试（backlog）
+
+- **混合解析**：页图看版面 + 文本层约束拼写（`vision` 已较稳，有空再试；纯 text 会毁表格关系）
+
+解析全链路复盘（问题 / 改动 / 调试 / 面试口述）：见 [`docs/booking_parse_summary.md`](booking_parse_summary.md)。
 
 ## 启动
 

@@ -56,7 +56,7 @@ def main() -> int:
             path = ROOT / case["file"]
             parsed = parse_pdf_bytes(path.read_bytes())
             doc_ok = parsed["doc_type_ok"]
-            pred = parsed["raw_extracted_data"]
+            pred = parsed.get("normalized_data") or parsed["raw_extracted_data"]
             validated, report = validate_booking(pred, parsed["field_confidence"])
 
         case_ok = True

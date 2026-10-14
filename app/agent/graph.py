@@ -25,10 +25,9 @@ from langgraph.types import Command, interrupt
 from app.agent.intents import apply_weight_unit_conversion
 from app.booking.feedback import discard_pending, promote_or_discard
 from app.config import STORE_DIR
-from app.models import BookingRecord, FieldIssue, ValidationReport
-from app.parse.extract import parse_pdf_bytes
-from app.parse.pdf_io import resolve_pdf_input
+from app.models import BookingRecord, ValidationReport
 from app.parse.schema_fill import fill_schema
+from app.tools.parse_booking_client import invoke_parse_booking
 from app.validate import validate_booking
 
 
@@ -45,6 +44,8 @@ class BookingGraphState(TypedDict, total=False):
     status: str
     message: str
     raw_extracted_data: Optional[dict[str, Any]]
+    normalized_data: Optional[dict[str, Any]]
+    llm_analysis: Optional[str]
     validated_data: Optional[dict[str, Any]]
     validation_report: Optional[dict[str, Any]]
     field_confidence: dict[str, float]
@@ -85,27 +86,52 @@ def _meta_sources(data: dict[str, Any], source: str) -> dict[str, Any]:
 
 
 def node_parse(state: BookingGraphState) -> dict[str, Any]:
+    """开票：经 parse_booking Tool（HTTP 或本地门面），不直连 extract。"""
     path = list(state.get("graph_path") or []) + ["parse"]
-    pdf_bytes, filename = resolve_pdf_input(
-        state.get("file_path"), state.get("base64_pdf")
+    tool = invoke_parse_booking(
+        file_path=state.get("file_path"),
+        base64_pdf=state.get("base64_pdf"),
     )
-    parsed = parse_pdf_bytes(pdf_bytes)
+    raw = tool.get("raw_extracted_data") or {}
+    normalized = tool.get("normalized_data") or raw
+    llm_analysis = tool.get("llm_analysis")
+    report = tool.get("validation_report") or {}
+    conf = {}
+    if isinstance(report, dict):
+        conf = dict(report.get("field_confidence") or {})
     hist = _append_hist(
         state, "open_booking", "human", {"file_path": state.get("file_path")}
     )
+    hist.append(
+        {
+            "at": _now(),
+            "action": "parse_validate",
+            "actor": "tool",
+            "detail": {
+                "overall": report.get("overall") if isinstance(report, dict) else None,
+                "via": "parse_booking_tool",
+                "has_llm_analysis": bool(llm_analysis),
+            },
+        }
+    )
+    seed = tool.get("validated_data") or normalized
     return {
         "graph_path": path,
         "phase": "open",
         "status": "Validating",
         "message": "校验中…",
-        "filename": filename,
-        "raw_extracted_data": parsed["raw_extracted_data"],
-        "field_confidence": parsed.get("field_confidence") or {},
-        "doc_type_ok": bool(parsed.get("doc_type_ok", True)),
-        "backend": parsed.get("backend"),
-        "parse_error": parsed.get("error"),
+        "filename": tool.get("filename"),
+        "raw_extracted_data": raw,
+        "normalized_data": normalized,
+        "llm_analysis": llm_analysis,
+        "validated_data": seed,
+        "validation_report": report,
+        "field_confidence": conf,
+        "doc_type_ok": bool(tool.get("doc_type_ok", True)),
+        "backend": tool.get("backend"),
+        "parse_error": None,
         "history": hist,
-        "meta": _meta_sources(parsed["raw_extracted_data"], "llm"),
+        "meta": _meta_sources(normalized, "llm"),
         "auto_submitted": False,
         "pending_action": None,
     }
@@ -144,7 +170,10 @@ def node_apply_patches(state: BookingGraphState) -> dict[str, Any]:
         "status": "Validating",
         "message": "校验中…",
         "validated_data": data,
-        "raw_extracted_data": state.get("raw_extracted_data") or data,
+        # raw / normalized / analysis：解析快照，patch 不改写
+        "raw_extracted_data": state.get("raw_extracted_data"),
+        "normalized_data": state.get("normalized_data"),
+        "llm_analysis": state.get("llm_analysis"),
         "field_confidence": conf,
         "meta": meta,
         "history": hist,
@@ -157,32 +186,23 @@ def node_apply_patches(state: BookingGraphState) -> dict[str, Any]:
 def node_validate(state: BookingGraphState) -> dict[str, Any]:
     path = list(state.get("graph_path") or []) + ["validate"]
     phase = state.get("phase") or "open"
-    if phase == "open":
-        raw = state.get("raw_extracted_data") or {}
-    else:
-        raw = state.get("validated_data") or state.get("raw_extracted_data") or {}
+    # 开票已由 parse_booking Tool 带齐三件套，此处不再本地重跑解析侧校验
+    if phase == "open" and state.get("validation_report"):
+        return {"graph_path": path}
 
+    data = (
+        state.get("validated_data")
+        or state.get("normalized_data")
+        or state.get("raw_extracted_data")
+        or {}
+    )
     conf = dict(state.get("field_confidence") or {})
-    validated, report = validate_booking(raw, conf)
-
-    if phase == "open" and not state.get("doc_type_ok", True):
-        report.overall = "FAIL"
-        report.issues.insert(
-            0,
-            FieldIssue(
-                field="_document",
-                rule="DOC-TYPE",
-                level="FAIL",
-                message=state.get("parse_error")
-                or "document does not look like a booking/shipping order",
-            ),
-        )
-        report.suggested_action = "reject_document"
+    validated, report = validate_booking(data, conf)
 
     hist = _append_hist(
         state,
-        "parse_validate" if phase == "open" else "revalidate",
-        "llm" if phase == "open" else (state.get("actor") or "human"),
+        "revalidate",
+        state.get("actor") or "human",
         {"overall": report.overall, "backend": state.get("backend")},
     )
     return {
@@ -255,6 +275,8 @@ def _as_record(state: BookingGraphState) -> BookingRecord:
         message=state.get("message"),
         filename=state.get("filename"),
         raw_extracted_data=state.get("raw_extracted_data"),
+        normalized_data=state.get("normalized_data"),
+        llm_analysis=state.get("llm_analysis"),
         validated_data=state.get("validated_data"),
         validation_report=report,
         meta=state.get("meta") or {},
@@ -289,6 +311,8 @@ def node_submit(state: BookingGraphState) -> dict[str, Any]:
         "status": "Idle",
         "message": msg,
         "raw_extracted_data": None,
+        "normalized_data": None,
+        "llm_analysis": None,
         "validated_data": None,
         "validation_report": None,
         "meta": {},
@@ -310,6 +334,8 @@ def node_void(state: BookingGraphState) -> dict[str, Any]:
         "status": "Idle",
         "message": "已作废，可开新票",
         "raw_extracted_data": None,
+        "normalized_data": None,
+        "llm_analysis": None,
         "validated_data": None,
         "validation_report": None,
         "meta": {},

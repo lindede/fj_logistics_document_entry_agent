@@ -25,8 +25,10 @@
 | 体积 / 体积单位 | measurement / measurement_unit | 同上；单位如 CBM |
 | 唛头 | marks | 箱唛；无证据为 `null`，不填 N/M |
 | HS 编码 | hs_code | 海关商品归类码；无证据为 `null` |
-| 运费条款 | freight | P 预付 / C 到付 / E 约定；无证据为 `null` |
-| 原始提取数据 | raw_extracted_data | 刚抽出、未充分治理的结果 |
+| 运费条款 | freight | P 预付 / C 到付 / E 约定；无证据为 `null`。单据标题常见别名：运费结算、付费方式、Freight Payment Terms |
+| 原始提取数据 | raw_extracted_data | 模型 JSON 原样（不做 normalize） |
+| 模型分析叙述 | llm_analysis | staged 回复中的 ANALYSIS 正文 |
+| 规整后数据 | normalized_data | 约定规整（运费/唛头等）后的结果 |
 | 校验后数据 | validated_data | 清洗与规则处理后的可信数据 |
 | 校验报告 | validation_report | 字段结果、置信度、建议操作 |
 | 三件套 | — | 上三者合称；一次解析须齐套 |

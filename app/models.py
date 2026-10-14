@@ -53,8 +53,10 @@ class ParseBookingRequest(BaseModel):
 
 class ParseBookingResponse(BaseModel):
     raw_extracted_data: dict[str, Any]
+    normalized_data: dict[str, Any]
     validated_data: dict[str, Any]
     validation_report: ValidationReport
+    llm_analysis: Optional[str] = None
     doc_type_ok: bool = True
     elapsed_ms: float = 0.0
 
@@ -65,12 +67,15 @@ class SessionActionRequest(BaseModel):
     file_path: Optional[str] = None
     base64_pdf: Optional[str] = None
     patches: Optional[dict[str, Any]] = None
+    force: Optional[bool] = None
 
 
 class BookingRecord(BaseModel):
     session_id: str
     status: str
     raw_extracted_data: Optional[dict[str, Any]] = None
+    normalized_data: Optional[dict[str, Any]] = None
+    llm_analysis: Optional[str] = None
     validated_data: Optional[dict[str, Any]] = None
     validation_report: Optional[ValidationReport] = None
     meta: dict[str, Any] = Field(default_factory=dict)

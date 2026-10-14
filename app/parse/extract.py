@@ -9,13 +9,12 @@ from typing import Any
 
 from app.config import (
     GOLD_DIR,
-    LLM_API_BASE,
-    LLM_API_KEY,
     LLM_INPUT_MODE,
     LLM_MODEL,
     LLM_PDF_FALLBACK_VISION,
     OPENAI_TEMPERATURE,
     has_llm_key,
+    make_openai_client,
     parse_backend,
 )
 from app.parse.pdf_io import assert_pdf, extract_text
@@ -52,8 +51,8 @@ def _text_layer_thin(text: str) -> bool:
 
 
 def fixture_extract() -> dict[str, Any]:
-    gold = json.loads((GOLD_DIR / "bkg_sample.json").read_text(encoding="utf-8"))
-    return fill_schema(gold)
+    """fixture 源数据：gold 文件原样（不做 normalize）。"""
+    return json.loads((GOLD_DIR / "bkg_sample.json").read_text(encoding="utf-8"))
 
 
 def _normalize_llm_fields(data: dict[str, Any]) -> dict[str, Any]:
@@ -68,17 +67,7 @@ def _normalize_llm_fields(data: dict[str, Any]) -> dict[str, Any]:
         out["marks"] = None
     if out.get("voyage") is None:
         out["voyage"] = ""
-    freight = out.get("freight")
-    if isinstance(freight, str) and freight.strip():
-        f = freight.strip().upper()
-        if f in {"P", "C", "E"}:
-            out["freight"] = f
-        elif "PREPAID" in f or "预付" in freight:
-            out["freight"] = "P"
-        elif "COLLECT" in f or "到付" in freight:
-            out["freight"] = "C"
-        else:
-            out["freight"] = None
+    out["freight"] = _normalize_freight(out.get("freight"))
     voyage = out.get("voyage")
     if isinstance(voyage, str) and re.search(r"ETD", voyage, re.I):
         out["voyage"] = ""
@@ -86,51 +75,125 @@ def _normalize_llm_fields(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def _extract_prompt_zh(*, as_pdf_file: bool = False) -> str:
+    """与 prompt_lab v4_staged 对齐：先 ANALYSIS 再 JSON。"""
     src = (
-        "下面直接给出完整出口货物托运单 PDF 文件（可含多页，请按页阅读版面）"
+        "下面直接给出完整出口货物托运单 PDF（可含多页）"
         if as_pdf_file
-        else "下面是出口货物托运单 PDF 的页面图像（每页一张，保留版面位置）"
+        else "下面是出口货物托运单 PDF 的页面图像（每页一张，可含多页）"
     )
     return (
-        f"你是国际物流单证录入助手。{src}，请抽取业务字段。\n"
-        "只返回一个 JSON 对象，不要 markdown，不要解释。\n"
+        f"你是国际物流单证录入助手。{src}。\n"
         "\n"
-        "【反幻觉 / 最高优先级】\n"
-        "- 只依据单据上可见文字与版面；禁止猜测、补全、推理「应该是多少」。\n"
-        "- 看不清、被裁切、跨页对不上、或栏位空白 → 该字段必须 null"
-        "（voyage 例外：无航次号时用 \"\"，不要用 ETD/日期冒充）。\n"
-        "- 禁止为了「字段齐全」或「类型好看」而编造公司名、港口、数字、箱型。\n"
-        "- 禁止用训练记忆或常见样例值填充；本单没有的内容一律 null。\n"
-        "- 不确定就 null，把问题留给后续校验与人工，不要假装抽到了。\n"
+        "请严格按两个阶段输出（同一次回复内完成），格式如下：\n"
         "\n"
-        "字段 key 必须为（且仅这些）：\n"
+        "### ANALYSIS\n"
+        "（中文。按块简述单据上你看到的内容，并尽量带上关键栏的原文：\n"
+        "货代/出具方、发货人、收货人、通知方、船名与航次、港口、箱型箱量、"
+        "货名件数毛重体积、运费等。\n"
+        "只写看得见的，不要猜。）\n"
+        "\n"
+        "### JSON\n"
+        "（紧接着只输出一个 JSON 对象，不要 markdown 代码围栏，不要在 JSON 后再写其它文字。\n"
+        "字段取值与上面 ANALYSIS 中对应栏位一致。\n"
+        "字段必须且仅含：\n"
         "shipper, consignee, notify_party, vessel, voyage, port_of_loading, "
-        "port_of_discharge, containers（[{type, qty}] 数组）, packages_qty, packages_unit, "
+        "port_of_discharge, containers（[{type, qty}]）, packages_qty, packages_unit, "
         "goods_desc, gross_weight, weight_unit, measurement, measurement_unit, "
         "hs_code, marks, freight。\n"
         "\n"
-        "类型约定（有证据时才填该类型；无证据用 null，勿用空字符串凑数）：\n"
-        "- 文本：非空 string；packages_qty / containers[].qty：integer；"
-        "gross_weight / measurement：number。\n"
-        "- marks：N/M 或无真实唛头 → null。\n"
-        "- vessel：只要船名/船司简称，不要电话或地址。\n"
-        "- consignee 与 notify_party 分栏读取，禁止合并或互换。\n"
-        "- freight 仅可为 P / C / E 或 null（单据写预付可映射为 P）。\n"
+        "规则：\n"
+        "- 栏空或看不清 → null（voyage 无航次号用 \"\"）。\n"
+        "- vessel：船名或船司简称；voyage：仅航次号（不要把开航日/ETD/电话当航次）。\n"
+        "- marks：N/M、NM、无真实唛头 → null。\n"
+        "- freight：P/C/E 或 null（预付/Prepaid→P；到付/Collect→C；约定/Elsewhere→E）。\n"
+        "- packages_qty / containers[].qty：integer；gross_weight / measurement：number。\n"
         "\n"
-        "格式示例（虚构占位，勿当作本题答案）：\n"
-        '{"shipper":"...","packages_qty":1,"gross_weight":1.0,"marks":null,"freight":null}'
+        "JSON 形态示例（虚构占位，勿当作本题答案）：\n"
+        '{"shipper":"...","consignee":"...","notify_party":"...","vessel":"...",'
+        '"voyage":"","port_of_loading":"...","port_of_discharge":"...",'
+        '"containers":[{"type":"...","qty":1}],"packages_qty":1,"packages_unit":"...",'
+        '"goods_desc":"...","gross_weight":1.0,"weight_unit":"KGS","measurement":1.0,'
+        '"measurement_unit":"CBM","hs_code":null,"marks":null,"freight":null}\n'
+        "）"
     )
 
 
-def _parse_llm_json_content(content: str) -> dict[str, Any]:
-    content = (content or "").strip()
-    if content.startswith("```"):
-        content = re.sub(r"^```(?:json)?\s*", "", content)
-        content = re.sub(r"\s*```$", "", content)
+def _normalize_freight(value: Any) -> str | None:
+    """把单据常见写法规整为 P/C/E；无法识别则 null。"""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    f = raw.upper()
+    if f in {"P", "C", "E"}:
+        return f
+    if "PREPAID" in f or "预付" in raw:
+        return "P"
+    if "COLLECT" in f or "到付" in raw:
+        return "C"
+    if (
+        f in {"E", "ELSEWHERE"}
+        or "PAYABLE ELSEWHERE" in f
+        or "约定" in raw
+        or "第三地" in raw
+    ):
+        return "E"
+    return None
+
+
+def _parse_json_object(blob: str) -> dict[str, Any] | None:
+    raw = (blob or "").strip()
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
     try:
-        return json.loads(content)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"LLM returned non-JSON: {content[:300]}") from exc
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else None
+    except json.JSONDecodeError:
+        matches = list(re.finditer(r"\{[\s\S]*\}", raw))
+        for m in reversed(matches):
+            try:
+                data = json.loads(m.group(0))
+                if isinstance(data, dict):
+                    return data
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def _extract_llm_analysis(content: str) -> str | None:
+    """从 staged 回复中取出 ### ANALYSIS 正文（若无则为 None）。"""
+    text = content or ""
+    m = re.search(
+        r"###\s*ANALYSIS\s*\n([\s\S]*?)(?=###\s*JSON|\Z)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not m:
+        return None
+    body = m.group(1).strip()
+    return body or None
+
+
+def _parse_llm_json_content(content: str) -> dict[str, Any]:
+    """支持纯 JSON，或 v4 分阶段「### ANALYSIS … ### JSON …」。只解析 JSON，不 normalize。"""
+    text = content or ""
+    m_j = re.search(r"###\s*JSON\s*\n([\s\S]*)", text, flags=re.IGNORECASE)
+    blob = m_j.group(1).strip() if m_j else text.strip()
+    data = _parse_json_object(blob)
+    if data is None and m_j:
+        data = _parse_json_object(text)
+    if data is None:
+        raise RuntimeError(f"LLM returned non-JSON: {text[:300]}")
+    return data
+
+
+def _parse_llm_response(content: str) -> tuple[str | None, dict[str, Any]]:
+    """解析模型回复 → (llm_analysis, raw_json_dict)。raw 未经 normalize。"""
+    return _extract_llm_analysis(content), _parse_llm_json_content(content)
 
 
 def _call_chat(client: Any, messages: list[dict[str, Any]], *, use_json_format: bool) -> str:
@@ -159,15 +222,23 @@ def _call_chat(client: Any, messages: list[dict[str, Any]], *, use_json_format: 
 
 
 def llm_extract_from_pdf(pdf_bytes: bytes, text_fallback: str = "") -> dict[str, Any]:
-    """主路径：file_url 直传 PDF；可选回退页图 / 文本。"""
+    """主路径：file_url 直传 PDF；可选回退页图 / 文本。
+
+    返回 {"raw_extracted_data": dict, "llm_analysis": str|None}。
+    raw 为模型 JSON 原样，不做 normalize。
+    """
     if not has_llm_key():
         raise RuntimeError(
             "PARSE_BACKEND=llm 但未配置 OPENAI_API_KEY（请参考 kb_pdf_to_vdb 的 .env）"
         )
-    from openai import OpenAI
-
-    client = OpenAI(api_key=LLM_API_KEY, base_url=LLM_API_BASE)
+    client = make_openai_client()
     mode = (os.getenv("LLM_INPUT_MODE") or LLM_INPUT_MODE or "pdf").strip().lower()
+
+    def _pack(content: str, **extra: Any) -> dict[str, Any]:
+        analysis, raw = _parse_llm_response(content)
+        out: dict[str, Any] = {"raw_extracted_data": raw, "llm_analysis": analysis}
+        out.update(extra)
+        return out
 
     def run_pdf_file() -> dict[str, Any]:
         prompt = _extract_prompt_zh(as_pdf_file=True)
@@ -183,17 +254,18 @@ def llm_extract_from_pdf(pdf_bytes: bytes, text_fallback: str = "") -> dict[str,
                 ],
             }
         ]
-        content = _call_chat(client, messages, use_json_format=False)
-        return _normalize_llm_fields(_parse_llm_json_content(content))
+        return _pack(_call_chat(client, messages, use_json_format=False))
 
     def run_vision() -> dict[str, Any]:
         prompt = _extract_prompt_zh(as_pdf_file=False)
-        urls = pdf_pages_as_png_data_urls(pdf_bytes)
+        urls, vision_paths = pdf_pages_as_png_data_urls(pdf_bytes)
         if not urls:
             raise RuntimeError("PDF 无法渲染为页面图像")
         messages = [{"role": "user", "content": vision_user_content(urls, prompt)}]
-        content = _call_chat(client, messages, use_json_format=False)
-        return _normalize_llm_fields(_parse_llm_json_content(content))
+        return _pack(
+            _call_chat(client, messages, use_json_format=False),
+            vision_page_paths=vision_paths,
+        )
 
     def run_text() -> dict[str, Any]:
         prompt = _extract_prompt_zh(as_pdf_file=False)
@@ -208,8 +280,7 @@ def llm_extract_from_pdf(pdf_bytes: bytes, text_fallback: str = "") -> dict[str,
             },
         ]
         logger.warning("LLM_INPUT_MODE=text：版面会丢失，建议 pdf 或 vision")
-        content = _call_chat(client, messages, use_json_format=True)
-        return _normalize_llm_fields(_parse_llm_json_content(content))
+        return _pack(_call_chat(client, messages, use_json_format=True))
 
     if mode == "text":
         return run_text()
@@ -255,16 +326,21 @@ def parse_pdf_bytes(data: bytes) -> dict[str, Any]:
         doc_type_ok = _looks_like_booking(text)
 
     if not doc_type_ok:
-        raw = fill_schema({})
+        raw: dict[str, Any] = {}
+        normalized = _normalize_llm_fields({})
         return {
             "raw_extracted_data": raw,
+            "normalized_data": normalized,
+            "llm_analysis": None,
             "doc_type_ok": False,
             "text": text,
             "backend": backend,
-            "field_confidence": estimate_confidence(raw, backend),
+            "field_confidence": estimate_confidence(normalized, backend),
             "error": "document does not look like a booking/shipping order",
         }
 
+    llm_analysis: str | None = None
+    vision_page_paths: list[str] = []
     if backend == "fixture":
         raw = fixture_extract()
         mode = "fixture"
@@ -274,19 +350,26 @@ def parse_pdf_bytes(data: bytes) -> dict[str, Any]:
             logger.warning("scanned PDF + LLM_INPUT_MODE=text will fail; forcing pdf")
             os.environ["LLM_INPUT_MODE"] = "pdf"
             mode = "pdf"
-        raw = llm_extract_from_pdf(data, text_fallback=text)
+        packed = llm_extract_from_pdf(data, text_fallback=text)
+        raw = packed["raw_extracted_data"]
+        llm_analysis = packed.get("llm_analysis")
+        vision_page_paths = list(packed.get("vision_page_paths") or [])
     else:
         raise ValueError(
             f"unknown PARSE_BACKEND={backend!r}; expected 'llm' or 'fixture'"
         )
 
+    normalized = _normalize_llm_fields(raw)
     return {
         "raw_extracted_data": raw,
+        "normalized_data": normalized,
+        "llm_analysis": llm_analysis,
         "doc_type_ok": True,
         "text": text,
         "backend": f"{backend}:{mode}" if backend == "llm" else backend,
         "field_confidence": estimate_confidence(
-            raw, "llm" if backend == "llm" else backend
+            normalized, "llm" if backend == "llm" else backend
         ),
         "text_layer_thin": thin,
+        "vision_page_paths": vision_page_paths,
     }

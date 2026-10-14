@@ -1,7 +1,7 @@
 {
   "shipper": "Guangzhou Great PowerEnergy (Qingdao) Co., Ltd.",
   "consignee": "GREAT POWER NEW ENERGY CO., LTD",
-  "notify_party": "COASTING INT'L LOGISTICS CO., LTD.",
+  "notify_party": "TENV INNOVATIONS PRIVATE LIMITED",
   "vessel": "MSC",
   "voyage": "",
   "port_of_loading": "QINGDAO",
@@ -16,5 +16,5 @@
   "measurement_unit": "CBM",
   "hs_code": null,
   "marks": null,
-  "freight": null
+  "freight": "P"
 }

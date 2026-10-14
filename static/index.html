@@ -11,17 +11,51 @@
 </head>
 <body>
   <div class="app">
-    <header class="top">
-      <div class="brand">FJ Logistics · Document Entry Agent</div>
-      <div class="stepper" id="stepper">
-        <div class="step" data-step="Idle">空闲</div>
-        <div class="step" data-step="Processing">处理中</div>
-        <div class="step" data-step="Await">待确认</div>
-        <div class="step" data-step="Done">完成</div>
+    <div class="chrome-top">
+      <a class="brand-mark" href="/" title="FJ Logistics · Document Entry Agent" aria-label="FJ Logistics">
+        <svg class="brand-svg" viewBox="0 0 40 40" width="36" height="36" aria-hidden="true">
+          <rect x="1" y="1" width="38" height="38" rx="10" fill="#0f5c4c"/>
+          <path d="M8 28 V12 h10.5 c4.2 0 7 2.2 7 5.6 0 3.5-2.8 5.7-7 5.7H14.2 V28 H8zm6.2-10.2 h3.6c1.7 0 2.7-.8 2.7-2.1s-1-2.1-2.7-2.1h-3.6v4.2z" fill="#fffcf7"/>
+          <path d="M26 28c2.8-3.2 4.5-6.4 4.5-10.2C30.5 12.2 28.2 9 24.5 9" fill="none" stroke="#b8e0d4" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <span class="brand-text">FJ</span>
+      </a>
+      <div class="stepper" id="stepper" aria-label="流程进度">
+        <div class="step" data-step="Idle">
+          <span class="step-dot" aria-hidden="true"></span>
+          <span class="step-label">空闲</span>
+        </div>
+        <div class="step-line" aria-hidden="true"></div>
+        <div class="step" data-step="Processing">
+          <span class="step-dot" aria-hidden="true"></span>
+          <span class="step-label">处理中</span>
+        </div>
+        <div class="step-line" aria-hidden="true"></div>
+        <div class="step" data-step="Await">
+          <span class="step-dot" aria-hidden="true"></span>
+          <span class="step-label">待确认</span>
+        </div>
+        <div class="step-line" aria-hidden="true"></div>
+        <div class="step" data-step="Done">
+          <span class="step-dot" aria-hidden="true"></span>
+          <span class="step-label">完成</span>
+        </div>
       </div>
-    </header>
+    </div>
 
     <main class="main" id="main"></main>
+
+    <div id="confirm-modal" class="modal" hidden>
+      <div class="modal-backdrop" data-confirm-cancel></div>
+      <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+        <h2 id="confirm-modal-title">确认</h2>
+        <p id="confirm-modal-body"></p>
+        <div class="modal-actions">
+          <button type="button" class="secondary" id="confirm-cancel">取消</button>
+          <button type="button" id="confirm-ok">确认</button>
+        </div>
+      </div>
+    </div>
 
     <div id="replace-modal" class="modal" hidden>
       <div class="modal-backdrop" data-modal-cancel></div>
@@ -35,7 +69,7 @@
       </div>
     </div>
 
-    <footer>
+    <footer class="chrome-bottom">
       <div class="composer" id="composer">
         <label class="btn secondary" for="file">PDF</label>
         <input id="file" type="file" accept="application/pdf" />

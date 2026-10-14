@@ -9,10 +9,35 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python scripts/generate_sample_pdf.py
+# 单进程（默认 APP_ROLE=all）
 uvicorn app.main:app --reload --port 8000
 ```
 
 浏览器打开 [http://127.0.0.1:8000](http://127.0.0.1:8000)。
+
+### 双进程（Agent + Tool，推荐演示边界）
+
+```bash
+# 终端 1：Tool（默认 :8001）
+./scripts/start_tool.sh
+
+# 终端 2：Agent（默认 :8000，已设 TOOL_BASE_URL）
+./scripts/start_agent.sh
+```
+
+启动脚本会 `source .env`。`PARSE_BACKEND` 以 `.env` 为准（示例为 `llm`）；离线联调可 `PARSE_BACKEND=fixture ./scripts/start_tool.sh`。亦可用 `TOOL_PORT` / `AGENT_PORT` / `TOOL_BASE_URL`。
+
+金标测 Tool 抽取流（须 Tool 已起且多为 `llm`）：
+
+```bash
+python scripts/eval_tool_gold.py
+# 或同进程：python scripts/eval_tool_gold.py --local
+```
+
+说明见 `data/gold/README.md`。
+
+Agent 开票节点通过 LangChain `StructuredTool` / `invoke_parse_booking` 调 Tool，**不直连** `extract`。  
+`file_path` 支持仓库相对路径、绝对路径、以及 `http(s)://` 远程 PDF。
 
 样例 PDF：`data/samples/BKG.pdf`（从需求 Word 附件抽出的官方托运单）。
 

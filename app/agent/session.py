@@ -8,7 +8,8 @@ from app.agent.graph import (
     resume_session,
     session_is_waiting,
 )
-from app.agent.intents import detect_intent, parse_nl_patches
+from app.agent.intents import apply_weight_unit_conversion, detect_intent
+from app.agent.nl_patch import parse_nl_patches
 from app.booking import process_booking, triple_from_record
 from app.booking.feedback import save_pending_source
 from app.config import SUBMIT_STRATEGY
@@ -38,6 +39,8 @@ class SessionManager:
                 "status": "Idle",
                 "message": "拖入 PDF 或输入开票指令开始",
                 "raw_extracted_data": None,
+                "normalized_data": None,
+                "llm_analysis": None,
                 "validated_data": None,
                 "validation_report": None,
                 "meta": {},
@@ -51,6 +54,8 @@ class SessionManager:
             "status": vals.get("status") or "Idle",
             "message": vals.get("message"),
             "raw_extracted_data": vals.get("raw_extracted_data"),
+            "normalized_data": vals.get("normalized_data"),
+            "llm_analysis": vals.get("llm_analysis"),
             "validated_data": vals.get("validated_data"),
             "validation_report": vals.get("validation_report"),
             "meta": vals.get("meta") or {},
@@ -77,6 +82,8 @@ class SessionManager:
         r.message = vals.get("message")
         r.filename = vals.get("filename")
         r.raw_extracted_data = vals.get("raw_extracted_data")
+        r.normalized_data = vals.get("normalized_data")
+        r.llm_analysis = vals.get("llm_analysis")
         r.validated_data = vals.get("validated_data")
         report = vals.get("validation_report")
         if report:
@@ -127,7 +134,7 @@ class SessionManager:
         )
         return self.snapshot()
 
-    def submit(self) -> dict[str, Any]:
+    def submit(self, *, force: bool = False) -> dict[str, Any]:
         if not self.session_id or not session_is_waiting(self.session_id):
             return {**self.snapshot(), "message": "当前状态不可提交"}
         vals = self._values()
@@ -135,10 +142,18 @@ class SessionManager:
         if status not in {"AwaitConfirm", "AwaitHuman"}:
             return {**self.snapshot(), "message": "当前状态不可提交"}
         report = vals.get("validation_report") or {}
-        if report.get("overall") == "FAIL":
-            return {**self.snapshot(), "message": "存在 FAIL，请先修正再提交"}
-        resume_session(self.session_id, action="submit", actor="human")
-        return self.snapshot()
+        overall = report.get("overall")
+        if overall in {"FAIL", "WARN"} and not force:
+            return {
+                **self.snapshot(),
+                "message": f"存在 {overall}，请修正后提交，或使用强制提交",
+            }
+        actor = "human_force" if force else "human"
+        resume_session(self.session_id, action="submit", actor=actor)
+        snap = self.snapshot()
+        if force and snap.get("status") == "Idle":
+            snap["message"] = snap.get("message") or "已强制提交"
+        return snap
 
     def void(self) -> dict[str, Any]:
         if not self.session_id or not session_is_waiting(self.session_id):
@@ -153,6 +168,8 @@ class SessionManager:
             "status": "Idle",
             "message": vals.get("message") or "已作废，可开新票",
             "raw_extracted_data": None,
+            "normalized_data": None,
+            "llm_analysis": None,
             "validated_data": None,
             "validation_report": None,
             "meta": {},
@@ -170,6 +187,7 @@ class SessionManager:
         file_path: str | None = None,
         base64_pdf: str | None = None,
         patches: dict[str, Any] | None = None,
+        force: bool = False,
     ) -> dict[str, Any]:
         vals = self._values()
         status = "Idle"
@@ -181,7 +199,7 @@ class SessionManager:
         if action in {"status", "snapshot"}:
             return self.snapshot()
         if action == "submit":
-            return self.submit()
+            return self.submit(force=force)
         if action == "void":
             return self.void()
         if action == "confirm_replace" and self._pending_replace:
@@ -237,20 +255,52 @@ class SessionManager:
         if intent == "patch_fields" and patches:
             return self.patch_fields(patches, actor="human")
         if intent == "nl_patch":
-            if status == "Idle":
-                return {
-                    **self.snapshot(),
-                    "message": "当前空闲，是否先开票？请上传 PDF",
-                }
-            nl = parse_nl_patches(text or "")
-            if not nl:
-                return {**self.snapshot(), "message": "未能理解改数字指令"}
-            return self.patch_fields(nl, actor="human")
+            return self._propose_ui_patches(text or "", status=status, vals=vals)
         if intent == "open_need_pdf":
             return {**self.snapshot(), "message": "开票需要 PDF，请拖入文件"}
         if intent == "noop":
             return self.snapshot()
         return {**self.snapshot(), "message": f"未识别指令：{text}"}
+
+    def _propose_ui_patches(
+        self,
+        text: str,
+        *,
+        status: str,
+        vals: dict[str, Any],
+    ) -> dict[str, Any]:
+        """LLM/正则 → 仅返回 ui_patches，不 resume 图、不改服务器会话数据。"""
+        if status == "Idle" or not self.session_id:
+            return {
+                **self.snapshot(),
+                "message": "当前空闲，是否先开票？请上传 PDF",
+            }
+        if status in {"Parsing", "Validating"} or not session_is_waiting(
+            self.session_id
+        ):
+            return {
+                **self.snapshot(),
+                "message": "正在处理中，请稍后再用文字改表单",
+            }
+        current = vals.get("validated_data") or {}
+        nl = parse_nl_patches(text, current=current)
+        if not nl:
+            return {
+                **self.snapshot(),
+                "message": "未能理解改字段指令，请换种说法或直接改表单",
+            }
+        ui = dict(nl)
+        convert = bool(ui.pop("_convert_weight", False))
+        if convert and "weight_unit" in ui:
+            converted = apply_weight_unit_conversion(current, str(ui["weight_unit"]))
+            ui["weight_unit"] = converted.get("weight_unit")
+            ui["gross_weight"] = converted.get("gross_weight")
+        return {
+            **self.snapshot(),
+            "ui_patches": ui,
+            "apply_ui_only": True,
+            "message": "已填入表单（未写入服务器），请核对后点「保存并重验」或提交",
+        }
 
 
 session_manager = SessionManager()
