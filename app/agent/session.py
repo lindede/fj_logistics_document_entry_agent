@@ -150,10 +150,7 @@ class SessionManager:
             }
         actor = "human_force" if force else "human"
         resume_session(self.session_id, action="submit", actor=actor)
-        snap = self.snapshot()
-        if force and snap.get("status") == "Idle":
-            snap["message"] = snap.get("message") or "已强制提交"
-        return snap
+        return self.snapshot()
 
     def void(self) -> dict[str, Any]:
         if not self.session_id or not session_is_waiting(self.session_id):
@@ -215,14 +212,15 @@ class SessionManager:
         if action == "patch" and patches:
             return self.patch_fields(patches, actor="human")
         if action == "open" and has_pdf:
-            if status != "Idle":
+            # Idle / Done：直接开新票；进行中才需确认放弃
+            if status not in {"Idle", "Done"}:
                 self._pending_replace = {
                     "file_path": file_path,
                     "base64_pdf": base64_pdf,
                 }
                 return {
                     **self.snapshot(),
-                    "message": "当前有进行中的单据，请确认是否换票",
+                    "message": "当前有进行中的单据，请确认是否放弃",
                     "replace_pending": True,
                 }
             return self.open_booking(file_path, base64_pdf)
@@ -236,7 +234,7 @@ class SessionManager:
             self._pending_replace = {"file_path": file_path, "base64_pdf": base64_pdf}
             return {
                 **self.snapshot(),
-                "message": "当前有进行中的单据，请确认是否换票",
+                "message": "当前有进行中的单据，请确认是否放弃",
                 "replace_pending": True,
             }
         if intent == "replace_confirm" and self._pending_replace:
@@ -270,10 +268,15 @@ class SessionManager:
         vals: dict[str, Any],
     ) -> dict[str, Any]:
         """LLM/正则 → 仅返回 ui_patches，不 resume 图、不改服务器会话数据。"""
+        if status == "Done":
+            return {
+                **self.snapshot(),
+                "message": "单据已提交（只读），不能再改字段。如需重做请上传新 PDF 开新票",
+            }
         if status == "Idle" or not self.session_id:
             return {
                 **self.snapshot(),
-                "message": "当前空闲，是否先开票？请上传 PDF",
+                "message": "请先开票或上传新 PDF 后再用文字改表单",
             }
         if status in {"Parsing", "Validating"} or not session_is_waiting(
             self.session_id

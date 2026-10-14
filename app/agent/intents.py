@@ -16,7 +16,7 @@ def detect_intent(
     if patches:
         return "patch_fields"
     if has_pdf:
-        if status != "Idle":
+        if status not in {"Idle", "Done"}:
             return "replace_conflict"
         return "open_booking"
     if not t:

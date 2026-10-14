@@ -73,5 +73,6 @@ def test_submit_resume_ends_wait():
         pytest.skip("fixture FAIL")
     sid = sm.session_id
     out = sm.submit()
-    assert out["status"] == "Idle"
+    assert out["status"] == "Done"
+    assert out.get("validated_data")
     assert not session_is_waiting(sid)

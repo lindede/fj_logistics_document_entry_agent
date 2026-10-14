@@ -254,7 +254,7 @@ def node_route(state: BookingGraphState) -> dict[str, Any]:
     if strategy == "auto_on_pass":
         return {
             "graph_path": path,
-            "status": "Idle",
+            "status": "AwaitConfirm",  # 随即进 submit → Done
             "message": "校验通过，已自动提交",
             "auto_submitted": True,
         }
@@ -302,20 +302,23 @@ def node_submit(state: BookingGraphState) -> dict[str, Any]:
         state, "submit", actor, {"path": str(store_path), "feedback": fb}
     )
     msg = (
-        "已自动提交，可开新票"
+        "已自动提交"
         if state.get("auto_submitted")
-        else "已提交，可开新票"
+        else ("已强制提交" if actor == "human_force" else "已提交")
     )
+    # 完成后保留字段只读展示，不回到 Idle；开新票需再上传 PDF
     return {
         "graph_path": path,
-        "status": "Idle",
-        "message": msg,
-        "raw_extracted_data": None,
-        "normalized_data": None,
-        "llm_analysis": None,
-        "validated_data": None,
-        "validation_report": None,
-        "meta": {},
+        "status": "Done",
+        "message": msg + "，可上传新 PDF 开新票",
+        "filename": state.get("filename"),
+        "raw_extracted_data": state.get("raw_extracted_data"),
+        "normalized_data": state.get("normalized_data"),
+        "llm_analysis": state.get("llm_analysis"),
+        "validated_data": state.get("validated_data"),
+        "validation_report": state.get("validation_report"),
+        "field_confidence": state.get("field_confidence") or {},
+        "meta": state.get("meta") or {},
         "history": hist,
         "auto_submitted": False,
         "pending_action": None,

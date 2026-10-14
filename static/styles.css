@@ -353,6 +353,45 @@ button:disabled,
   background: transparent;
 }
 .composer input[type="file"] { display: none; }
+/* PDF / 发送：与表单「提交」同款主色实心按钮 */
+.composer #btn-pdf,
+.composer #send {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 10px 16px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--accent) !important;
+  color: #fff !important;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: none;
+}
+.composer #btn-pdf:disabled,
+.composer #send:disabled {
+  background: #e5dfd4 !important;
+  color: #a39e94 !important;
+  border-color: #d8d1c4 !important;
+  cursor: not-allowed;
+  font-weight: 500;
+}
+.fields-readonly input,
+.fields-readonly select {
+  background: #f3f1ec;
+  color: var(--ink);
+  cursor: default;
+  opacity: 1;
+}
+.hint-inline {
+  color: var(--muted);
+  font-size: 14px;
+}
 .msg {
   margin-top: 8px;
   color: var(--muted);

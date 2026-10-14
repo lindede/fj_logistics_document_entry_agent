@@ -26,7 +26,8 @@ def test_submit_blocks_fail_unless_force():
     assert "FAIL" in (blocked.get("message") or "")
 
     forced = sm.submit(force=True)
-    assert forced.get("status") == "Idle"
+    assert forced.get("status") == "Done"
+    assert forced.get("validated_data")
 
 
 def test_submit_blocks_warn_unless_force():
@@ -50,4 +51,4 @@ def test_submit_blocks_warn_unless_force():
     assert "WARN" in (blocked.get("message") or "")
 
     forced = sm.submit(force=True)
-    assert forced.get("status") == "Idle"
+    assert forced.get("status") == "Done"

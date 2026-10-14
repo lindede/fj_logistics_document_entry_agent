@@ -48,7 +48,7 @@ def test_submit_without_human_discards_pending(fb_root):
     if snap["status"] == "AwaitHuman" and snap.get("validation_report", {}).get("overall") == "FAIL":
         pytest.skip("fixture sample failed hard; cannot submit")
     out = sm.submit()
-    assert out["status"] == "Idle"
+    assert out["status"] == "Done"
     assert not pending_dir(sid, root=fb_root).exists()
     assert not case_dir(sid, root=fb_root).exists()
 

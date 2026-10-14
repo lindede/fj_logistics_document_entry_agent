@@ -66,11 +66,12 @@ function labelHtml(key, label, confTxt) {
   return `${label}${star}${confTxt}`;
 }
 
-function controlHtml(key, value) {
+function controlHtml(key, value, { readonly = false } = {}) {
   const prop = propOf(key);
   const types = typeList(prop);
   const req = isUiRequired(key, prop);
-  const reqAttr = req ? "required" : "";
+  const reqAttr = req && !readonly ? "required" : "";
+  const roAttr = readonly ? "readonly disabled" : "";
   const title = prop.description || "";
 
   if (prop.enum) {
@@ -85,12 +86,12 @@ function controlHtml(key, value) {
     const emptyOpt = allowsNull(prop)
       ? `<option value=""${emptySel}>（空）</option>`
       : "";
-    return `<select data-key="${key}" ${reqAttr} title="${esc(title)}">${emptyOpt}${opts}</select>`;
+    return `<select data-key="${key}" ${reqAttr} ${roAttr} title="${esc(title)}">${emptyOpt}${opts}</select>`;
   }
 
   if (types.includes("integer")) {
     const min = prop.minimum != null ? `min="${prop.minimum}"` : "";
-    return `<input data-key="${key}" type="number" step="1" ${min} ${reqAttr} value="${esc(value ?? "")}" title="${esc(title)}" />`;
+    return `<input data-key="${key}" type="number" step="1" ${min} ${reqAttr} ${roAttr} value="${esc(value ?? "")}" title="${esc(title)}" />`;
   }
   if (types.includes("number")) {
     const min =
@@ -103,11 +104,11 @@ function controlHtml(key, value) {
       prop.exclusiveMinimum != null
         ? `data-exclusive-min="${prop.exclusiveMinimum}"`
         : "";
-    return `<input data-key="${key}" type="number" step="any" ${min} ${reqAttr} value="${esc(value ?? "")}" title="${esc(title)}" ${ex} />`;
+    return `<input data-key="${key}" type="number" step="any" ${min} ${reqAttr} ${roAttr} value="${esc(value ?? "")}" title="${esc(title)}" ${ex} />`;
   }
 
-  const minLen = prop.minLength != null && req ? `minlength="${prop.minLength}"` : "";
-  return `<input data-key="${key}" type="text" ${minLen} ${reqAttr} value="${esc(value ?? "")}" title="${esc(title)}" />`;
+  const minLen = prop.minLength != null && req && !readonly ? `minlength="${prop.minLength}"` : "";
+  return `<input data-key="${key}" type="text" ${minLen} ${reqAttr} ${roAttr} value="${esc(value ?? "")}" title="${esc(title)}" />`;
 }
 
 function issuesByField(issues) {
@@ -166,7 +167,12 @@ function mapStep(status) {
   if (status === "Idle") return "Idle";
   if (status === "Parsing" || status === "Validating") return "Processing";
   if (status === "AwaitConfirm" || status === "AwaitHuman") return "Await";
+  if (status === "Done") return "Done";
   return "Idle";
+}
+
+function isBusyStatus(st) {
+  return st && st !== "Idle" && st !== "Done";
 }
 
 const STEP_ORDER = ["Idle", "Processing", "Await", "Done"];
@@ -216,15 +222,18 @@ function firstContainer(data) {
   return { type: "", qty: "" };
 }
 
-function renderContainerFields(data, report, fieldIssues) {
+function renderContainerFields(data, report, fieldIssues, { readonly = false } = {}) {
   const c0 = firstContainer(data);
   const conf = (report.field_confidence || {}).containers;
   const confTxt =
     conf == null ? "" : ` <span style="color:#999">(${Number(conf).toFixed(2)})</span>`;
-  const star = `<span class="req" title="必填">*</span>`;
+  const star = readonly ? "" : `<span class="req" title="必填">*</span>`;
   const iss = fieldIssues.containers || [];
   const lvl = worstLevel(iss);
   const err = fieldErrorText(iss);
+  const roAttr = readonly ? "readonly disabled" : "";
+  const reqAttr = readonly ? "" : "required minlength=\"1\"";
+  const qtyReq = readonly ? "" : "required min=\"1\"";
   const extra =
     Array.isArray(data.containers) && data.containers.length > 1
       ? `<div class="field-hint">另有 ${data.containers.length - 1} 组箱型箱量，提交时保留</div>`
@@ -232,10 +241,10 @@ function renderContainerFields(data, report, fieldIssues) {
   return `<div class="field-block">
       <div class="field-row field-row-containers ${lvl ? `has-${lvl}` : ""}" data-issue-field="containers">
         <label>${FIELD_LABELS.container_type}${star}${confTxt}</label>
-        <input data-ui="container_type" required minlength="1" value="${esc(c0.type ?? "")}" placeholder="如 40HQ" />
+        <input data-ui="container_type" ${reqAttr} ${roAttr} value="${esc(c0.type ?? "")}" placeholder="如 40HQ" />
         <label class="field-label-qty">${FIELD_LABELS.container_qty}${star}${confTxt}</label>
-        <input data-ui="container_qty" type="number" required min="1" step="1" value="${esc(c0.qty ?? "")}" placeholder="数量" />
-        ${err ? `<div class="field-error">${esc(err)}</div>` : ""}
+        <input data-ui="container_qty" type="number" ${qtyReq} step="1" ${roAttr} value="${esc(c0.qty ?? "")}" placeholder="数量" />
+        ${!readonly && err ? `<div class="field-error">${esc(err)}</div>` : ""}
       </div>
       ${extra}
     </div>`;
@@ -244,6 +253,9 @@ function renderContainerFields(data, report, fieldIssues) {
 function actionButtonsHtml(s) {
   const overall = (s.validation_report || {}).overall || "";
   const st = s.status || "";
+  if (st === "Done") {
+    return `<div class="actions done-hint"><span class="hint-inline">已完成（只读）。上传新 PDF 可开新票。</span></div>`;
+  }
   const awaitOk = st === "AwaitConfirm" || st === "AwaitHuman";
   // 无问题才能普通提交；WARN/FAIL 走强制提交
   const canSubmit = awaitOk && overall === "PASS";
@@ -262,19 +274,27 @@ function renderResult(s) {
   const overall = report.overall || "?";
   const issues = report.issues || [];
   const fieldIssues = issuesByField(issues);
+  const isDone = s.status === "Done";
   const isHuman = s.status === "AwaitHuman";
+  const statusLabel = isDone ? "已完成" : isHuman ? "待人工处理" : "待确认";
   const rows = KEY_FIELDS.map(([k, label]) => {
-    if (k === "containers") return renderContainerFields(data, report, fieldIssues);
+    if (k === "containers") {
+      return renderContainerFields(data, report, fieldIssues, { readonly: isDone });
+    }
     const conf = (report.field_confidence || {})[k];
-    const confTxt = conf == null ? "" : ` <span style="color:#999">(${Number(conf).toFixed(2)})</span>`;
+    const confTxt =
+      conf == null || isDone
+        ? ""
+        : ` <span style="color:#999">(${Number(conf).toFixed(2)})</span>`;
     const val = data[k];
     const iss = fieldIssues[k] || [];
-    const lvl = worstLevel(iss);
-    const err = fieldErrorText(iss);
+    const lvl = isDone ? "" : worstLevel(iss);
+    const err = isDone ? "" : fieldErrorText(iss);
+    const labelPart = isDone ? esc(label) : labelHtml(k, label, confTxt);
     return `<div class="field-row">
-      <label for="f-${k}">${labelHtml(k, label, confTxt)}</label>
+      <label for="f-${k}">${labelPart}</label>
       <div class="field-control ${lvl ? `has-${lvl}` : ""}" data-issue-field="${k}">
-        ${controlHtml(k, val)}
+        ${controlHtml(k, val, { readonly: isDone })}
         ${err ? `<div class="field-error">${esc(err)}</div>` : ""}
       </div>
     </div>`;
@@ -296,11 +316,15 @@ function renderResult(s) {
   return `<div class="grid">
     <div>
       <div style="margin-bottom:12px">
-        <span class="badge ${overall}">${overall}</span>
-        <span style="margin-left:8px;color:#6b6560">${isHuman ? "待人工处理" : "待确认"}</span>
-        <span class="schema-legend"><span class="req">*</span> 必填 · <span class="opt">可空</span> 可为空</span>
+        <span class="badge ${isDone ? "PASS" : overall}">${isDone ? "DONE" : overall}</span>
+        <span style="margin-left:8px;color:#6b6560">${statusLabel}</span>
+        ${
+          isDone
+            ? ""
+            : `<span class="schema-legend"><span class="req">*</span> 必填 · <span class="opt">可空</span> 可为空</span>`
+        }
       </div>
-      <form id="booking-form" class="fields" novalidate>${rows}</form>
+      <form id="booking-form" class="fields ${isDone ? "fields-readonly" : ""}" novalidate>${rows}</form>
       ${actionButtonsHtml(s)}
     </div>
     <div class="report">
@@ -412,9 +436,9 @@ function bindResultActions() {
 
 function render(s, justDone = false) {
   state = s;
-  paintStepper(s.status || "Idle", justDone);
-  const main = document.getElementById("main");
   const st = s.status || "Idle";
+  paintStepper(st, justDone || st === "Done");
+  const main = document.getElementById("main");
   if (st === "Idle") main.innerHTML = renderIdle(s);
   else if (st === "Parsing" || st === "Validating") main.innerHTML = renderProcessing(s);
   else main.innerHTML = renderResult(s);
@@ -430,6 +454,7 @@ function render(s, justDone = false) {
 
   if (st === "Idle") bindIdleDropzone();
   else if (st === "AwaitConfirm" || st === "AwaitHuman") bindResultActions();
+  syncSendButton();
 }
 
 function showError(err) {
@@ -477,16 +502,12 @@ async function act(body) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const done =
-      (body.action === "submit" || /已提交|已自动提交|已强制提交/.test(s.message || "")) &&
-      s.status === "Idle";
-    render(s, done);
+    render(s, s.status === "Done");
     if (s.apply_ui_only && s.ui_patches) {
       applyUiPatches(s.ui_patches);
       const msg = document.getElementById("msg");
       if (msg) msg.textContent = s.message || "";
     }
-    if (done) setTimeout(() => refresh().catch(() => {}), 1200);
     return s;
   } catch (err) {
     showError(err);
@@ -583,7 +604,28 @@ async function submitWithPatches({ force }) {
   await act({ action: "submit", force: !!force });
 }
 
+/** PDF 按钮已确认放弃时置 true，避免选文件后再弹一次 */
+let skipAbandonConfirmOnce = false;
+
+async function confirmAbandonIfBusy() {
+  const st = state.status || "Idle";
+  if (!isBusyStatus(st)) return true;
+  return openConfirm({
+    title: "放弃当前单据？",
+    body: "上传新 PDF 将作废当前进行中的单据并重新解析。",
+    okLabel: "确认放弃并上传",
+    okClass: "",
+  });
+}
+
 async function uploadFile(file) {
+  const busy = isBusyStatus(state.status || "Idle");
+  if (skipAbandonConfirmOnce) {
+    skipAbandonConfirmOnce = false;
+  } else {
+    const ok = await confirmAbandonIfBusy();
+    if (!ok) return;
+  }
   const fd = new FormData();
   fd.append("file", file);
   render({
@@ -593,6 +635,12 @@ async function uploadFile(file) {
   });
   try {
     const s = await api("/api/session/upload", { method: "POST", body: fd });
+    // 进行中已确认放弃：后端若返回 replace_pending，自动确认换票
+    if (s.replace_pending && busy) {
+      setReplaceModal(false);
+      await act({ action: "confirm_replace" });
+      return;
+    }
     render(s);
   } catch (err) {
     showError(err);
@@ -638,11 +686,41 @@ function bindReplaceModal() {
   });
 }
 
+function syncSendButton() {
+  const cmd = document.getElementById("cmd");
+  const send = document.getElementById("send");
+  if (!cmd || !send) return;
+  const st = state.status || "Idle";
+  const hasText = Boolean(cmd.value.trim());
+  // Done：已提交只读，禁止发改字段指令
+  // Parsing/Validating：处理中禁用
+  // Idle / Await*：有字才可发（Idle 可发开票指令；Await 可发 NL 改字段）
+  const allow =
+    hasText &&
+    st !== "Done" &&
+    st !== "Parsing" &&
+    st !== "Validating";
+  send.disabled = !allow;
+}
+
 function bindComposer() {
   const composer = document.getElementById("composer");
   const file = document.getElementById("file");
+  const btnPdf = document.getElementById("btn-pdf");
   const cmd = document.getElementById("cmd");
   const send = document.getElementById("send");
+
+  if (btnPdf) {
+    btnPdf.addEventListener("click", async () => {
+      const busy = isBusyStatus(state.status || "Idle");
+      if (busy) {
+        const ok = await confirmAbandonIfBusy();
+        if (!ok) return;
+        skipAbandonConfirmOnce = true;
+      }
+      file.click();
+    });
+  }
 
   file.addEventListener("change", () => {
     if (file.files?.[0]) {
@@ -652,13 +730,16 @@ function bindComposer() {
   });
   send.addEventListener("click", async () => {
     const text = cmd.value.trim();
-    if (!text) return;
+    if (!text || send.disabled) return;
     cmd.value = "";
+    syncSendButton();
     await act({ action: "chat", text });
   });
+  cmd.addEventListener("input", syncSendButton);
   cmd.addEventListener("keydown", (e) => {
     if (e.key === "Enter") send.click();
   });
+  syncSendButton();
 
   ["dragenter", "dragover"].forEach((ev) =>
     composer.addEventListener(ev, (e) => {
