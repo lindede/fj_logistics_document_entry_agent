@@ -2,14 +2,15 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
+from app.agent.amend_llm import run_done_amend_from_text
 from app.agent.graph import (
     get_session_values,
     open_session,
     resume_session,
     session_is_waiting,
+    sync_done_state,
 )
-from app.agent.intents import apply_weight_unit_conversion, detect_intent
-from app.agent.nl_patch import parse_nl_patches
+from app.agent.intents import detect_intent
 from app.booking import process_booking, triple_from_record
 from app.booking.feedback import save_pending_source
 from app.config import SUBMIT_STRATEGY
@@ -24,6 +25,8 @@ class SessionManager:
         self.session_id: Optional[str] = None
         self._pending_replace: Optional[dict[str, Any]] = None
         self.submit_strategy = SUBMIT_STRATEGY
+        # Done 修正失败时的只读预览（不落盘）
+        self._amend_preview: Optional[dict[str, Any]] = None
 
     def _values(self) -> dict[str, Any]:
         if not self.session_id:
@@ -48,10 +51,14 @@ class SessionManager:
                 "filename": None,
                 "submit_strategy": self.submit_strategy,
                 "replace_pending": pending,
+                "composer_mode": "hidden",
+                "highlight_fields": [],
+                "error_fields": [],
             }
-        return {
+        status = vals.get("status") or "Idle"
+        out = {
             "session_id": vals.get("session_id") or self.session_id,
-            "status": vals.get("status") or "Idle",
+            "status": status,
             "message": vals.get("message"),
             "raw_extracted_data": vals.get("raw_extracted_data"),
             "normalized_data": vals.get("normalized_data"),
@@ -64,7 +71,27 @@ class SessionManager:
             "submit_strategy": self.submit_strategy,
             "replace_pending": pending,
             "graph_waiting": session_is_waiting(self.session_id),
+            "composer_mode": "done_amend" if status == "Done" else "hidden",
+            "highlight_fields": [],
+            "error_fields": [],
         }
+        if status == "Done" and self._amend_preview:
+            prev = self._amend_preview
+            if prev.get("validated_data") is not None:
+                out["validated_data"] = prev["validated_data"]
+            if prev.get("validation_report") is not None:
+                out["validation_report"] = prev["validation_report"]
+            if prev.get("message"):
+                out["message"] = prev["message"]
+            out["highlight_fields"] = list(prev.get("changed_fields") or [])
+            out["error_fields"] = list(prev.get("error_fields") or [])
+            out["amend_written"] = bool(prev.get("written"))
+            out["amend_ok"] = bool(prev.get("written"))
+            if prev.get("understood") is not None:
+                out["understood"] = prev.get("understood")
+            if prev.get("amend_trace") is not None:
+                out["amend_trace"] = prev.get("amend_trace")
+        return out
 
     @property
     def record(self) -> Any:
@@ -115,6 +142,7 @@ class SessionManager:
             base64_pdf=base64_pdf,
         )
         self.session_id = sid
+        self._amend_preview = None
         save_pending_source(sid, pdf_bytes, filename)
         return self.snapshot()
 
@@ -160,6 +188,7 @@ class SessionManager:
         hist = list(vals.get("history") or [])
         self.session_id = None
         self._pending_replace = None
+        self._amend_preview = None
         return {
             "session_id": None,
             "status": "Idle",
@@ -174,6 +203,9 @@ class SessionManager:
             "filename": None,
             "submit_strategy": self.submit_strategy,
             "replace_pending": False,
+            "composer_mode": "hidden",
+            "highlight_fields": [],
+            "error_fields": [],
         }
 
     def handle(
@@ -253,57 +285,61 @@ class SessionManager:
         if intent == "patch_fields" and patches:
             return self.patch_fields(patches, actor="human")
         if intent == "nl_patch":
-            return self._propose_ui_patches(text or "", status=status, vals=vals)
+            return self._amend_done_from_chat(text or "", status=status, vals=vals)
         if intent == "open_need_pdf":
             return {**self.snapshot(), "message": "开票需要 PDF，请拖入文件"}
         if intent == "noop":
             return self.snapshot()
         return {**self.snapshot(), "message": f"未识别指令：{text}"}
 
-    def _propose_ui_patches(
+    def _amend_done_from_chat(
         self,
         text: str,
         *,
         status: str,
         vals: dict[str, Any],
     ) -> dict[str, Any]:
-        """LLM/正则 → 仅返回 ui_patches，不 resume 图、不改服务器会话数据。"""
-        if status == "Done":
+        """仅 Done：LLM tool / 正则 → amend_booking_record（先验后写）。"""
+        if status != "Done" or not self.session_id:
             return {
                 **self.snapshot(),
-                "message": "单据已提交（只读），不能再改字段。如需重做请上传新 PDF 开新票",
+                "message": "文字修正仅在提交完成（Done）后可用；录入中请直接改表单",
             }
-        if status == "Idle" or not self.session_id:
-            return {
-                **self.snapshot(),
-                "message": "请先开票或上传新 PDF 后再用文字改表单",
-            }
-        if status in {"Parsing", "Validating"} or not session_is_waiting(
-            self.session_id
-        ):
-            return {
-                **self.snapshot(),
-                "message": "正在处理中，请稍后再用文字改表单",
-            }
-        current = vals.get("validated_data") or {}
-        nl = parse_nl_patches(text, current=current)
-        if not nl:
-            return {
-                **self.snapshot(),
-                "message": "未能理解改字段指令，请换种说法或直接改表单",
-            }
-        ui = dict(nl)
-        convert = bool(ui.pop("_convert_weight", False))
-        if convert and "weight_unit" in ui:
-            converted = apply_weight_unit_conversion(current, str(ui["weight_unit"]))
-            ui["weight_unit"] = converted.get("weight_unit")
-            ui["gross_weight"] = converted.get("gross_weight")
-        return {
-            **self.snapshot(),
-            "ui_patches": ui,
-            "apply_ui_only": True,
-            "message": "已填入表单（未写入服务器），请核对后点「保存并重验」或提交",
+        # 预览失败时以预览数据为当前上下文，便于连续修正
+        current = (self._amend_preview or {}).get("validated_data") or vals.get(
+            "validated_data"
+        ) or {}
+        result = run_done_amend_from_text(
+            self.session_id, text, current=current
+        )
+        preview = {
+            "validated_data": result.get("validated_data") or current,
+            "validation_report": result.get("validation_report"),
+            "changed_fields": result.get("changed_fields") or [],
+            "error_fields": result.get("error_fields") or [],
+            "message": result.get("message"),
+            "written": bool(result.get("written")),
+            "understood": result.get("understood"),
+            "amend_trace": result.get("amend_trace"),
         }
+        self._amend_preview = preview
+        if result.get("written"):
+            rec = result.get("record") or {}
+            sync_done_state(
+                self.session_id,
+                validated_data=result.get("validated_data"),
+                validation_report=result.get("validation_report"),
+                history=list(rec.get("history") or vals.get("history") or []),
+                message=result.get("message"),
+                normalized_data=result.get("validated_data"),
+            )
+        snap = self.snapshot()
+        snap["message"] = result.get("message") or snap.get("message")
+        snap["amend_written"] = bool(result.get("written"))
+        snap["amend_ok"] = bool(result.get("ok"))
+        snap["understood"] = result.get("understood")
+        snap["amend_trace"] = result.get("amend_trace")
+        return snap
 
 
 session_manager = SessionManager()

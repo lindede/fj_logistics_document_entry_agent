@@ -26,19 +26,30 @@ PARSE_DEBUG_DUMP = os.getenv("PARSE_DEBUG_DUMP", "").strip().lower() in {
     "yes",
     "on",
 }
+# Done 指令轨迹落盘 data/debug/amend_*.json；默认跟随 PARSE_DEBUG_DUMP
+_amend_dbg = os.getenv("AMEND_DEBUG_DUMP", "").strip().lower()
+if _amend_dbg in {"1", "true", "yes", "on"}:
+    AMEND_DEBUG_DUMP = True
+elif _amend_dbg in {"0", "false", "no", "off"}:
+    AMEND_DEBUG_DUMP = False
+else:
+    AMEND_DEBUG_DUMP = PARSE_DEBUG_DUMP
 BOOKING_DATA_SCHEMA_PATH = SCHEMAS_DIR / "booking_data.schema.json"
 
 # 与 kb_pdf_to_vdb 对齐的 OpenAI 兼容网关配置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 OPENAI_BASE_URL = os.getenv("OPENAI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
-# 多模态默认 glm-4.6v-flash（支持 file_url 直接吃 PDF）
+# 多模态：PDF/vision 解析（支持 file_url）
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "glm-4.6v-flash").strip()
+# 纯文本：Done 指令修正、nl_patch 等（勿用视觉模型）
+OPENAI_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "glm-4.5-air").strip()
 OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.1"))
 
 # 兼容旧变量名（若只配了旧名仍可用）
 LLM_API_KEY = os.getenv("LLM_API_KEY", "").strip() or OPENAI_API_KEY
 LLM_API_BASE = (os.getenv("LLM_API_BASE", "").strip() or OPENAI_BASE_URL).strip().rstrip("/")
 LLM_MODEL = os.getenv("LLM_MODEL", "").strip() or OPENAI_MODEL
+LLM_TEXT_MODEL = os.getenv("LLM_TEXT_MODEL", "").strip() or OPENAI_TEXT_MODEL
 
 # pdf=file_url 直传整份 PDF（推荐，多页一份）；vision=每页渲图；text=纯文本（丢版面）
 LLM_INPUT_MODE = os.getenv("LLM_INPUT_MODE", "pdf").strip().lower()

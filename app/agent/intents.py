@@ -22,6 +22,10 @@ def detect_intent(
     if not t:
         return "noop"
 
+    # Done：文字一律走存盘修正，避免「确认/取消」等词误进 submit/void
+    if status == "Done":
+        return "nl_patch"
+
     if any(k in t for k in ("提交", "确认提交", "submit", "confirm")):
         return "submit"
     if any(k in t for k in ("作废", "取消", "void", "discard", "放弃")):

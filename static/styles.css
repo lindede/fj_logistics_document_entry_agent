@@ -353,6 +353,19 @@ button:disabled,
   background: transparent;
 }
 .composer input[type="file"] { display: none; }
+.composer #cmd[hidden],
+.composer #send[hidden],
+.composer #btn-pdf[hidden],
+.composer[hidden],
+.chrome-bottom[hidden] {
+  display: none !important;
+}
+.chrome-bottom.chrome-msg-only .composer {
+  display: none !important;
+}
+.chrome-bottom.chrome-msg-only {
+  padding-top: 4px;
+}
 /* PDF / 发送：与表单「提交」同款主色实心按钮 */
 .composer #btn-pdf,
 .composer #send {
@@ -387,6 +400,80 @@ button:disabled,
   color: var(--ink);
   cursor: default;
   opacity: 1;
+}
+.field-control.field-amended input,
+.field-control.field-amended select,
+.field-row-containers.field-amended input {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, var(--line));
+  outline-offset: 1px;
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+.amend-banner {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.45;
+  border: 1px solid var(--line);
+}
+.amend-banner.amend-ok {
+  background: #e8f6f0;
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--line));
+  color: #1f5c45;
+}
+.amend-banner.amend-fail {
+  background: #fceeee;
+  border-color: color-mix(in srgb, var(--fail) 35%, var(--line));
+  color: #8a2b2b;
+}
+.amend-banner.amend-info {
+  background: #f3f1ec;
+  color: var(--muted);
+}
+.amend-trace {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink);
+}
+.amend-trace .trace-user,
+.amend-trace .trace-understood {
+  margin: 6px 0 8px;
+  color: var(--muted);
+  word-break: break-all;
+}
+.amend-trace .trace-understood {
+  color: var(--ink);
+}
+.amend-trace .trace-line {
+  margin: 4px 0;
+  line-height: 1.4;
+  word-break: break-all;
+}
+.amend-trace .trace-ok {
+  display: inline-block;
+  width: 1em;
+  color: var(--accent);
+  font-weight: 700;
+}
+.amend-trace .trace-dump {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.amend-trace code {
+  font-size: 12px;
+  background: #f3f1ec;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.fields-readonly .field-control.has-fail .field-error,
+.fields-readonly .field-control.has-warn .field-error,
+.fields-readonly .field-row-containers.has-fail .field-error,
+.fields-readonly .field-row-containers.has-warn .field-error {
+  display: block;
 }
 .hint-inline {
   color: var(--muted);

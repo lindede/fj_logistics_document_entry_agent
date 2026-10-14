@@ -222,29 +222,37 @@ function firstContainer(data) {
   return { type: "", qty: "" };
 }
 
-function renderContainerFields(data, report, fieldIssues, { readonly = false } = {}) {
+function renderContainerFields(
+  data,
+  report,
+  fieldIssues,
+  { readonly = false, highlight = false, showIssues = true } = {}
+) {
   const c0 = firstContainer(data);
   const conf = (report.field_confidence || {}).containers;
   const confTxt =
-    conf == null ? "" : ` <span style="color:#999">(${Number(conf).toFixed(2)})</span>`;
+    conf == null || readonly
+      ? ""
+      : ` <span style="color:#999">(${Number(conf).toFixed(2)})</span>`;
   const star = readonly ? "" : `<span class="req" title="必填">*</span>`;
   const iss = fieldIssues.containers || [];
-  const lvl = worstLevel(iss);
-  const err = fieldErrorText(iss);
+  const lvl = showIssues ? worstLevel(iss) : "";
+  const err = showIssues ? fieldErrorText(iss) : "";
   const roAttr = readonly ? "readonly disabled" : "";
   const reqAttr = readonly ? "" : "required minlength=\"1\"";
   const qtyReq = readonly ? "" : "required min=\"1\"";
+  const amended = highlight ? " field-amended" : "";
   const extra =
     Array.isArray(data.containers) && data.containers.length > 1
       ? `<div class="field-hint">另有 ${data.containers.length - 1} 组箱型箱量，提交时保留</div>`
       : "";
   return `<div class="field-block">
-      <div class="field-row field-row-containers ${lvl ? `has-${lvl}` : ""}" data-issue-field="containers">
+      <div class="field-row field-row-containers ${lvl ? `has-${lvl}` : ""}${amended}" data-issue-field="containers">
         <label>${FIELD_LABELS.container_type}${star}${confTxt}</label>
         <input data-ui="container_type" ${reqAttr} ${roAttr} value="${esc(c0.type ?? "")}" placeholder="如 40HQ" />
         <label class="field-label-qty">${FIELD_LABELS.container_qty}${star}${confTxt}</label>
         <input data-ui="container_qty" type="number" ${qtyReq} step="1" ${roAttr} value="${esc(c0.qty ?? "")}" placeholder="数量" />
-        ${!readonly && err ? `<div class="field-error">${esc(err)}</div>` : ""}
+        ${err ? `<div class="field-error">${esc(err)}</div>` : ""}
       </div>
       ${extra}
     </div>`;
@@ -254,7 +262,7 @@ function actionButtonsHtml(s) {
   const overall = (s.validation_report || {}).overall || "";
   const st = s.status || "";
   if (st === "Done") {
-    return `<div class="actions done-hint"><span class="hint-inline">已完成（只读）。上传新 PDF 可开新票。</span></div>`;
+    return "";
   }
   const awaitOk = st === "AwaitConfirm" || st === "AwaitHuman";
   // 无问题才能普通提交；WARN/FAIL 走强制提交
@@ -277,9 +285,16 @@ function renderResult(s) {
   const isDone = s.status === "Done";
   const isHuman = s.status === "AwaitHuman";
   const statusLabel = isDone ? "已完成" : isHuman ? "待人工处理" : "待确认";
+  const highlight = new Set(s.highlight_fields || []);
+  const errorFields = new Set(s.error_fields || []);
+  const showDoneIssues = isDone && (issues.length > 0 || highlight.size > 0 || errorFields.size > 0);
   const rows = KEY_FIELDS.map(([k, label]) => {
     if (k === "containers") {
-      return renderContainerFields(data, report, fieldIssues, { readonly: isDone });
+      return renderContainerFields(data, report, fieldIssues, {
+        readonly: isDone,
+        highlight: highlight.has("containers"),
+        showIssues: !isDone || showDoneIssues,
+      });
     }
     const conf = (report.field_confidence || {})[k];
     const confTxt =
@@ -288,12 +303,14 @@ function renderResult(s) {
         : ` <span style="color:#999">(${Number(conf).toFixed(2)})</span>`;
     const val = data[k];
     const iss = fieldIssues[k] || [];
-    const lvl = isDone ? "" : worstLevel(iss);
-    const err = isDone ? "" : fieldErrorText(iss);
+    const lvl = !isDone || showDoneIssues ? worstLevel(iss) : "";
+    const err = !isDone || showDoneIssues ? fieldErrorText(iss) : "";
+    const amended = highlight.has(k) ? " field-amended" : "";
+    const errMark = errorFields.has(k) && !lvl ? " has-fail" : "";
     const labelPart = isDone ? esc(label) : labelHtml(k, label, confTxt);
     return `<div class="field-row">
       <label for="f-${k}">${labelPart}</label>
-      <div class="field-control ${lvl ? `has-${lvl}` : ""}" data-issue-field="${k}">
+      <div class="field-control ${lvl ? `has-${lvl}` : ""}${errMark}${amended}" data-issue-field="${k}">
         ${controlHtml(k, val, { readonly: isDone })}
         ${err ? `<div class="field-error">${esc(err)}</div>` : ""}
       </div>
@@ -313,17 +330,70 @@ function renderResult(s) {
     .map((h) => `${esc(h.at)} ${esc(h.action)}/${esc(h.actor)}`)
     .join("<br/>");
 
+  const statusBar = isDone
+    ? ""
+    : `<div style="margin-bottom:12px">
+        <span class="badge ${overall}">${overall}</span>
+        <span style="margin-left:8px;color:#6b6560">${esc(statusLabel)}</span>
+        <span class="schema-legend"><span class="req">*</span> 必填 · <span class="opt">可空</span> 可为空</span>
+      </div>`;
+
+  let amendBanner = "";
+  if (isDone && s.message) {
+    const kind =
+      s.amend_written === true
+        ? "ok"
+        : s.amend_written === false
+          ? "fail"
+          : "info";
+    amendBanner = `<div class="amend-banner amend-${kind}" role="status">${esc(s.message)}</div>`;
+  }
+
+  const trace = s.amend_trace;
+  let traceHtml = "";
+  if (isDone && trace && Array.isArray(trace.steps)) {
+    const lines = trace.steps
+      .map((st) => {
+        const ok = st.ok === true ? "✓" : st.ok === false ? "✗" : "·";
+        const name = st.step || "?";
+        const extra =
+          st.summary ||
+          (st.patches ? JSON.stringify(st.patches) : "") ||
+          st.error ||
+          st.raw_arguments ||
+          "";
+        const short =
+          typeof extra === "string"
+            ? extra.slice(0, 160)
+            : extra
+              ? JSON.stringify(extra).slice(0, 160)
+              : "";
+        return `<div class="trace-line"><span class="trace-ok">${ok}</span> <code>${esc(name)}</code>${
+          short ? ` — ${esc(short)}` : ""
+        }</div>`;
+      })
+      .join("");
+    const dump = trace.dump_path
+      ? `<div class="trace-dump">落盘：${esc(trace.dump_path)}</div>`
+      : "";
+    const understood =
+      s.understood && typeof s.understood === "object"
+        ? `<div class="trace-understood"><strong>分析结果</strong> ${esc(
+            JSON.stringify(s.understood)
+          )}</div>`
+        : "";
+    traceHtml = `<div class="amend-trace">
+      <div><strong>指令轨迹</strong> <span style="color:#999">${esc(trace.text_model || "")}</span></div>
+      <div class="trace-user"><strong>原指令</strong>「${esc(trace.user_text || "")}」</div>
+      ${understood}
+      ${lines}${dump}
+    </div>`;
+  }
+
   return `<div class="grid">
     <div>
-      <div style="margin-bottom:12px">
-        <span class="badge ${isDone ? "PASS" : overall}">${isDone ? "DONE" : overall}</span>
-        <span style="margin-left:8px;color:#6b6560">${statusLabel}</span>
-        ${
-          isDone
-            ? ""
-            : `<span class="schema-legend"><span class="req">*</span> 必填 · <span class="opt">可空</span> 可为空</span>`
-        }
-      </div>
+      ${statusBar}
+      ${amendBanner}
       <form id="booking-form" class="fields ${isDone ? "fields-readonly" : ""}" novalidate>${rows}</form>
       ${actionButtonsHtml(s)}
     </div>
@@ -332,6 +402,7 @@ function renderResult(s) {
       <div style="margin:8px 0;color:#6b6560">${esc(report.suggested_action || "")}</div>
       <div class="issue-summary">${fieldIssueCount ? `${fieldIssueCount} 个字段有问题（悬停字段可查看）` : "字段无问题"}</div>
       ${issueHtml}
+      ${traceHtml}
       <div class="history">${hist}</div>
     </div>
   </div>`;
@@ -503,11 +574,6 @@ async function act(body) {
       body: JSON.stringify(body),
     });
     render(s, s.status === "Done");
-    if (s.apply_ui_only && s.ui_patches) {
-      applyUiPatches(s.ui_patches);
-      const msg = document.getElementById("msg");
-      if (msg) msg.textContent = s.message || "";
-    }
     return s;
   } catch (err) {
     showError(err);
@@ -686,21 +752,36 @@ function bindReplaceModal() {
   });
 }
 
-function syncSendButton() {
+function syncComposerVisibility() {
+  const bottom = document.querySelector(".chrome-bottom");
+  const composer = document.getElementById("composer");
+  const btnPdf = document.getElementById("btn-pdf");
   const cmd = document.getElementById("cmd");
   const send = document.getElementById("send");
   if (!cmd || !send) return;
   const st = state.status || "Idle";
+  // 底栏仅 Done：PDF + 指令；Idle/处理中整栏隐藏；Await 只留消息条
+  const showChat = st === "Done";
+  const showMsgOnly = st === "AwaitConfirm" || st === "AwaitHuman";
+  if (btnPdf) btnPdf.hidden = !showChat;
+  cmd.hidden = !showChat;
+  send.hidden = !showChat;
+  if (!showChat) cmd.value = "";
+  else cmd.placeholder = "用指令修正已提交数据，如：毛重单位从 KGS 换成 TON";
+  if (composer) {
+    composer.classList.remove("composer-pdf-only");
+    composer.hidden = !showChat;
+  }
+  if (bottom) {
+    bottom.hidden = !(showChat || showMsgOnly);
+    bottom.classList.toggle("chrome-msg-only", showMsgOnly);
+  }
   const hasText = Boolean(cmd.value.trim());
-  // Done：已提交只读，禁止发改字段指令
-  // Parsing/Validating：处理中禁用
-  // Idle / Await*：有字才可发（Idle 可发开票指令；Await 可发 NL 改字段）
-  const allow =
-    hasText &&
-    st !== "Done" &&
-    st !== "Parsing" &&
-    st !== "Validating";
-  send.disabled = !allow;
+  send.disabled = !(showChat && hasText);
+}
+
+function syncSendButton() {
+  syncComposerVisibility();
 }
 
 function bindComposer() {
@@ -732,8 +813,23 @@ function bindComposer() {
     const text = cmd.value.trim();
     if (!text || send.disabled) return;
     cmd.value = "";
+    send.disabled = true;
+    const footerMsg = document.getElementById("msg");
+    if (footerMsg) footerMsg.textContent = "指令识别与执行中…";
+    const banner = document.querySelector(".amend-banner");
+    if (banner) {
+      banner.className = "amend-banner amend-info";
+      banner.textContent = "指令识别与执行中…";
+    }
+    const s = await act({ action: "chat", text });
+    if (s?.highlight_fields?.length) {
+      const first = s.highlight_fields[0];
+      const el =
+        document.querySelector(`[data-issue-field="${CSS.escape(first)}"]`) ||
+        document.querySelector(`[data-key="${CSS.escape(first)}"]`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
     syncSendButton();
-    await act({ action: "chat", text });
   });
   cmd.addEventListener("input", syncSendButton);
   cmd.addEventListener("keydown", (e) => {

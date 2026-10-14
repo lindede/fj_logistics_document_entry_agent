@@ -18,6 +18,7 @@
 
 - `bkg_sample.json` — 正确主样例（notify=TENV）
 - `bkg_fail_same_ports.json` — 合成失败单（POL=POD）
+- `bkg_fail_no_notify.json` — 合成失败单（无通知方；PDF：`samples/BKG_fail_no_notify.pdf`）
 
 扫描拆页等 PDF 尚未标金标，要加就补 `gold/*.json` + cases 一行。
 

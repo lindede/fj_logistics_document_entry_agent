@@ -9,7 +9,7 @@ from typing import Any
 
 from app.config import (
     BOOKING_FIELD_KEYS,
-    LLM_MODEL,
+    LLM_TEXT_MODEL,
     OPENAI_TEMPERATURE,
     has_llm_key,
     make_openai_client,
@@ -101,7 +101,7 @@ def _llm_nl_patch(
 
     client = make_openai_client()
     kwargs: dict[str, Any] = {
-        "model": LLM_MODEL,
+        "model": LLM_TEXT_MODEL,
         "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},

@@ -31,7 +31,7 @@ M-FE → Agent(:8000 Session+LangGraph) --HTTP Tool--> Tool(:8001 parse_booking)
 
 | 项 | 说明 |
 | --- | --- |
-| ADV-01 | 底栏自然语言改字段：LLM→`ui_patches` **只填表单**；须再点「保存并重验」才进图；无 key/fixture 时正则回退 |
+| ADV-01 | **Done 态**底栏指令：LLM Function Calling → `amend_booking_record`（先验后写 store）；FAIL 不落盘；UI 高亮变更/错误字段；Await 用表单，不再 NL 填表 |
 | ADV-02 | `observe.timed` 记录耗时与字段置信度 |
 | MCP | `/api/mcp/tools` + 共用 `parse_booking` |
 | auto_on_pass | `POST /api/config/submit_strategy` |

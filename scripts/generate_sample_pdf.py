@@ -314,6 +314,13 @@ def main() -> None:
         fail_lines,
         "BKG SAMPLE / SHIPPING ORDER (FAIL POL=POD)",
     )
+    # 无通知方：刻意不写 Notify Party，供 STRUCT-REQUIRED / 空通知方用例
+    no_notify_lines = [(k, v) for k, v in lines if k != "Notify Party"]
+    draw_booking(
+        SAMPLES / "BKG_fail_no_notify.pdf",
+        no_notify_lines,
+        "BKG SAMPLE / SHIPPING ORDER (FAIL missing notify)",
+    )
     draw_booking(
         SAMPLES / "not_booking.pdf",
         [
@@ -331,6 +338,7 @@ def main() -> None:
     draw_split_required_pages(split_path, gold)
 
     print("wrote", SAMPLES / "BKG_fail_same_ports.pdf")
+    print("wrote", SAMPLES / "BKG_fail_no_notify.pdf")
     print("wrote", SAMPLES / "not_booking.pdf")
     print("wrote", split_path)
     print("note: official BKG.pdf is not overwritten")

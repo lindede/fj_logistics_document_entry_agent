@@ -482,3 +482,27 @@ def session_is_waiting(session_id: str) -> bool:
     snap = booking_graph.get_state(_cfg(session_id))
     return bool(snap.next)
 
+
+def sync_done_state(
+    session_id: str,
+    *,
+    validated_data: dict[str, Any] | None,
+    validation_report: dict[str, Any] | None,
+    history: list[dict[str, Any]] | None = None,
+    message: str | None = None,
+    normalized_data: dict[str, Any] | None = None,
+) -> None:
+    """Done 后 amend 写盘成功时，同步 LangGraph checkpoint 供 snapshot 读取。"""
+    patch: dict[str, Any] = {
+        "status": "Done",
+        "validated_data": validated_data,
+        "validation_report": validation_report,
+    }
+    if history is not None:
+        patch["history"] = history
+    if message is not None:
+        patch["message"] = message
+    if normalized_data is not None:
+        patch["normalized_data"] = normalized_data
+    booking_graph.update_state(_cfg(session_id), patch)
+
