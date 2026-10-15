@@ -1,183 +1,189 @@
 # 开发计划（四里程碑）
 
 依据：`requirements_understanding.md`、`module_design.md`、`flow_design.md`、`ui_design.md`。  
-目标：按里程碑交付，避免一上来铺全选做。
+演示材料主稿：`docs/demo_pitch.md`。  
+目标：按里程碑交付；下列状态以**当前仓库实现**为准。
 
 | 里程碑 | 一句话目标 | 大致对应 | 状态 |
 | --- | --- | --- | --- |
 | **M1 能跑通** | 样例 PDF → 解析 → 校验 → 工作台确认/作废，主链路可演示 | 核心 P0 骨架 | 已完成 |
 | **M2 校验与识别准确率** | 规则与主数据扎实；LLM 抽取可测、可迭代提准 | VAL/BR/MD + 评测 | 已完成 |
-| **M3 加分/选做** | 动态指令、可观测、自动提交、MCP 风格描述、LangGraph 等 | P2 / 部分 P1 | 已完成（同进程） |
-| **M4 Tool 服务 + Agent 服务** | Agent **只通过封装 Tool** 调解析/校验；逻辑上（可进程上）与 Agent 分离 | API-01、AGT-01/02、TC-02 | **下一步** |
+| **M3 加分/选做** | 动态指令、可观测、自动提交、MCP 风格、LangGraph 等 | P2 / 部分 P1 | 已完成 |
+| **M4 Tool 服务 + Agent 服务** | Agent **只通过封装 Tool** 调解析/校验；可双进程分离 | API-01、AGT-01/02、TC-02 | **已完成** |
+
+后续以 backlog / 演示打磨为主，不再开新的必做里程碑编号（除非试题范围外扩）。
 
 ---
 
-## 里程碑 1：能跑通（End-to-End）
+## 里程碑 1：能跑通（End-to-End）— 已完成
 
 ### 目标
 
-操作员用 **v4 Idle 架子** 上传样例 PDF，走完：开票 → 处理中 → 待确认/待人工 → 提交或作废；后端给出三件套；会话状态基本正确。
+操作员用工作台上传样例 PDF，走完：开票 → 处理中 → 待确认/待人工 → 提交或作废；后端给出三件套；会话状态基本正确。
 
 ### 范围（做）
 
 | 序号 | 工作项 | 模块 | 需求锚点 |
 | --- | --- | --- | --- |
 | 1.1 | 工程骨架：Python + FastAPI、配置、样例 PDF 入仓 | — | TC-01、DEMO-01 |
-| 1.2 | 接入：HTTP `/api/parse_booking`（可先于 MCP）；base64/路径判别；PDF 格式校验 | M-GW | API-01～03、TC-02/03 |
-| 1.3 | 解析：PDF 文本层 + **LLM 抽取**（可配置后端接口预留）；单据类型粗判 | M-PAR | PAR-01～04、BG-01 |
+| 1.2 | 接入：HTTP `/api/parse_booking`；base64/路径判别；PDF 格式校验 | M-GW | API-01～03、TC-02/03 |
+| 1.3 | 解析：PDF 文本层 + **LLM 抽取**；单据类型粗判 | M-PAR | PAR-01～04、BG-01 |
 | 1.4 | 结构补齐：按 FLD 补全 key，缺省 `null` | M-PAR / M-VAL | VAL-04、FLD-* |
-| 1.5 | 校验：结构检查 + **至少 3 条 BR**（建议 BR-01/02/04 先落地）+ report | M-VAL | VAL-05/08、BR-* |
-| 1.6 | BookingRecord 雏形：三件套 + `meta`（默认 llm）+ `history`（关键节点追加） | M-AGT | DATA-01～03、VAL-08 |
-| 1.7 | 会话状态机最小集：Idle → Parsing → Validating → AwaitConfirm/Human → 提交/作废回 Idle | M-AGT | AGT-02/05、flow |
-| 1.8 | 前端架子：顶进度 + 中区 + 底栏拖 PDF/指令；四态可切换展示 | M-FE | BG-03、ui_design |
-| 1.9 | 人工改字段 → 再调校验（同一 Validating） | M-FE、M-VAL、M-AGT | UC-02 |
-| 1.10 | 提交/持久化节点（本地文件或轻量存储即可） | M-AGT | flow 提交节点 |
+| 1.5 | 校验：结构检查 + **至少 3 条 BR** + report | M-VAL | VAL-05/08、BR-* |
+| 1.6 | BookingRecord：三件套 + `meta` + `history` | M-AGT | DATA-01～03、VAL-08 |
+| 1.7 | 会话：Idle → 解析/校验 → AwaitConfirm/Human → 提交或作废（提交后演进为 **Done**，见现状） | M-AGT | AGT-02/05、flow |
+| 1.8 | 前端架子：顶进度 + 中区 + 底栏 | M-FE | BG-03、ui_design |
+| 1.9 | 人工改字段 → 再校验（提交前 patch） | M-FE、M-VAL、M-AGT | UC-02 |
+| 1.10 | 提交/持久化（`data/store`） | M-AGT | flow 提交节点 |
 
-### 本里程碑可简化（刻意不做或做假）
+### 验收（M1）
 
-- MCP Tool 可后置，先 HTTP  
-- 船名/港口白名单可用**小表种子**（完整收集放 M2）  
-- `auto_on_pass` 不做，固定 `manual`  
-- 自然语言改数（ADV-01）、完整可观测（ADV-02）不做  
-- 换票冲突可做最简询问或暂禁止二次上传  
-
-### 验收（M1 Done）
-
-- [ ] 样例 PDF 一键开票，返回 raw / validated / report  
-- [ ] 工作台可见状态进度与结果，可提交或作废  
-- [ ] FAIL 样例（如人为装港=卸港）进待人工，改后可再校验  
-- [ ] 容器中有 meta/history 基本写入  
-- [ ] 单进程本地可稳定演示 UC-01 / UC-02 / UC-04  
+- [x] 样例 PDF 开票，返回 raw / validated / report  
+- [x] 工作台可见状态与结果，可提交或作废  
+- [x] FAIL 样例进待人工，改后可再校验  
+- [x] meta/history 基本写入  
+- [x] 本地可演示 UC-01 / UC-02 / UC-04  
 
 ---
 
-## 里程碑 2：数据验证 + LLM 识别准确率
+## 里程碑 2：数据验证 + LLM 识别准确率 — 已完成
 
 ### 目标
 
-校验体系按需求站稳；抽取准确率可量化、可回归，针对样例与扩展 case 提升识别质量。
+校验体系站稳；抽取准确率可量化、可回归。
 
 ### 范围（做）
 
 | 序号 | 工作项 | 模块 | 需求锚点 |
 | --- | --- | --- | --- |
-| 2.1 | 补齐 BR-03/06 等规则；单位阈值表可配置 | M-VAL、M-MD | BR-*、TC-05 |
-| 2.2 | 主数据：船名白名单、港口白名单种子扩充与函数接口固化 | M-MD | BR-03、BR-06 |
-| 2.3 | 结构化输出强化：Schema/Pydantic + LLM structured output；失败重试策略 | M-PAR、M-VAL | VAL-04 |
-| 2.4 | **评测集**：样例 gold + 若干变体（字段缺失、WARN/FAIL 场景） | — | PAR、VAL、DEMO |
-| 2.5 | **准确率指标**：字段级 exact/归一化匹配；报表或脚本输出 | M-OBS / 脚本 | 演示「准确率方案」 |
-| 2.6 | Prompt/抽取链路迭代（少样本、字段说明、版式提示）；记录前后对比 | M-PAR | BG-04、PAR-01 |
-| 2.7 | 置信度进入 report（LLM 字段分或工程估）；低置信走待人工 | M-VAL、M-PAR | VAL-06 |
-| 2.8 | history/meta 完善：人改、规则结果可追溯 | M-AGT | DATA-02/03 |
-| 2.9 | **人工修正回流 → 回归 source case**（见下方「待办记一笔」；本里程碑可先占位） | M-AGT / 脚本 | VAL-07 |
-| 2.10 | 前端：报告与字段状态展示更清晰（仍保持 v4 简洁） | M-FE | UC-03 |
+| 2.1 | 补齐 BR；单位阈值表可配置 | M-VAL、M-MD | BR-*、TC-05 |
+| 2.2 | 船名/港口白名单种子与接口 | M-MD | BR-03、BR-06 |
+| 2.3 | Schema / 结构化输出与失败重试 | M-PAR、M-VAL | VAL-04 |
+| 2.4 | 评测集：gold + FAIL/WARN 等变体 | — | PAR、VAL、DEMO |
+| 2.5 | 准确率脚本与基线 | 脚本 | DEMO 准确率方案 |
+| 2.6 | Prompt / 抽取迭代（vision 等） | M-PAR | BG-04、PAR-01 |
+| 2.7 | 置信度进 report；低置信待人工 | M-VAL、M-PAR | VAL-06 |
+| 2.8 | history/meta 可追溯 | M-AGT | DATA-02/03 |
+| 2.9 | 人工修正回流 → `data/feedback` 回归用例 | M-AGT | VAL-07 |
+| 2.10 | 前端报告与字段状态展示 | M-FE | UC-03 |
 
-### 验收（M2 Done）
+### 验收（M2）
 
-- [ ] ≥3 条确定性规则可演示成功/失败/警告  
-- [ ] 有可重复跑的评测脚本 + 基线准确率数字  
-- [ ] 针对评测集完成至少一轮「改抽取 → 准确率上升」的记录  
-- [ ] 白名单/阈值未命中行为符合 WARN 约定  
-- [ ] 演示材料可讲清：校验分层 + 准确率怎么提  
+- [x] ≥3 条确定性规则可演示  
+- [x] `scripts/eval_accuracy.py` + `docs/eval_baseline.md`  
+- [x] 提准手段可讲（见 `demo_pitch` / `booking_parse_summary`）  
+- [x] 白名单未命中 → WARN 约定  
+- [x] VAL-07：仅人工改字段后再提交写入 `feedback/<sid>/`  
 
 ---
 
-## 里程碑 3：加分 / 选做
+## 里程碑 3：加分 / 选做 — 已完成
 
 ### 目标
 
-原文进阶与体验增强，在 M1/M2 稳定后再做。
+原文进阶与体验增强（在 M1/M2 稳定后）。
 
-| 序号 | 工作项 | 模块 | 需求锚点 |
+| 序号 | 工作项 | 模块 | 落地现状 |
 | --- | --- | --- | --- |
-| 3.1 | 动态指令：自然语言改字段（如 KGS→TON）→ 再校验 | M-AGT、M-FE | ADV-01、UC-08 |
-| 3.2 | 可观测：耗时 + LLM 字段置信度日志；预留指标/追踪扩展点 | M-OBS | ADV-02 |
-| 3.3 | MCP Tool 正式封装（与 HTTP 共用核心） | M-GW | API-01、TC-02 |
-| 3.4 | 提交策略 `auto_on_pass` 可配置 | M-AGT | AGT-06 |
-| 3.5 | 换票冲突完整询问流 | M-AGT、M-FE | UC-06、AGT-05 |
-| 3.6 | 解析后端切换（Docling/混合）配置落地 | M-PAR | PAR-01、OPEN 类结论 |
-| 3.7 | 扫描件 OCR/视觉路径（P1 扩展） | M-PAR | BG-01 |
-| 3.8 | Agent 编排可演示图 + 与 LangGraph（或等价）对齐说明 | M-AGT | AGT-01、DEMO-02 |
+| 3.1 | 动态指令 ADV-01 | M-AGT、M-FE | **Done 态**底栏 NL → Function Calling → `amend_booking_record`（图外；Await 用表单） |
+| 3.2 | 可观测 ADV-02 | M-OBS | `observe.timed` 等 |
+| 3.3 | MCP 风格描述 | M-GW | `GET /api/mcp/tools` + 共用 `parse_booking`（非标准 MCP 协议） |
+| 3.4 | `auto_on_pass` | M-AGT | `POST /api/config/submit_strategy` |
+| 3.5 | 换票冲突 | M-AGT、M-FE | 进行中再上传询问 |
+| 3.6 | 解析后端切换 | M-PAR | 配置项保留；主路径 multimodal |
+| 3.7 | 视觉路径 | M-PAR | vision / pdf file_url |
+| 3.8 | LangGraph 编排 | M-AGT | `booking_graph` + MemorySaver；`session_id=thread_id` |
 
-### 验收（M3 Done）
+### 验收（M3）
 
-- [x] ADV-01、ADV-02 至少一项可现场演示  
-- [x] MCP 或自动提交/冲突流等至少两项可讲清并跑通  
-- [x] 不破坏 M1/M2 回归评测基线（允许小幅波动并说明）  
+- [x] ADV-01、ADV-02 可演示  
+- [x] MCP 风格 / 自动提交 / 冲突流可讲清并跑通  
+- [x] 不破坏 M1/M2 评测主路径  
 
-> M3 的 MCP 仍是**同进程**「风格描述 + HTTP」；Agent 开票路径仍直调 Python。真正「Agent → Tool」边界放到 **M4**。
+> 提交后业务态为 **Done**（只读）；作废 → Idle。强制提交为规则误拦时的应急出口（见 `demo_pitch` 工程边界）。
 
 ---
 
-## 里程碑 4：Tool 服务 + Agent 服务（下一步）
+## 里程碑 4：Tool 服务 + Agent 服务 — 已完成
 
 ### 目标
 
-满足原文「将 Tool 交给 LLM Agent / 工作流调用」的**调用边界**：解析+校验（含规则与主数据）只通过封装好的 Tool 暴露；Agent（Session + LangGraph）**不再**直接 `import` 解析/校验实现。  
-Demo 可先 **单进程双模块** 做技术验证；再可选拆成两个进程。
+解析+校验只通过 Tool 暴露；Agent（Session + LangGraph）开票经 Tool 门面/HTTP，不直连 extract。
 
-### 范围（做）
+### 范围与落地
 
-| 序号 | 工作项 | 模块 | 需求锚点 |
-| --- | --- | --- | --- |
-| 4.1 | 抽出显式 Tool 门面：`parse_booking`（入参 path/base64 → 三件套），HTTP 与 Agent **只走此门面** | M-GW / tools | API-01～03、TC-02 |
-| 4.2 | LangGraph 节点改为调用 Tool 门面（同进程函数或本机 HTTP），去掉对 `extract`/`validate` 的直连 | M-AGT | AGT-01/02 |
-| 4.3 | `GET /api/mcp/tools`（或标准 MCP Server）与门面一一对应，可讲清「Agent 调哪些 Tool」 | M-GW | API-01、TC-02 |
-| 4.4 | （可选）拆进程：`tool_service`（解析校验）+ `agent_service`（会话/编排/前端），配置 Base URL | 部署 | 扩展，非 Demo 必做 |
-| 4.5 | 超时 / 错误透传 / 日志标明 `tool_call`，避免与同进程直调行为漂移 | M-OBS、M-AGT | ADV-02 延伸 |
-| 4.6 | 回归：原 API 测试 + 会话开票仍过；文档更新架构图 | 测试 / docs | DEMO-02 |
+| 序号 | 工作项 | 落地现状 |
+| --- | --- | --- |
+| 4.1 | Tool 门面 `parse_booking` | `process_booking` / HTTP；Agent `invoke_parse_booking` |
+| 4.2 | LangGraph `parse` 只调 Tool | 已落地 |
+| 4.3 | MCP 风格与门面对齐 | `/api/mcp/tools` |
+| 4.4 | 双进程 | `APP_ROLE=tool`(:8001) + `APP_ROLE=agent`(:8000)；亦可 `all` 单进程 |
+| 4.5 | 错误/耗时透传 | 与 OBS 一并可用 |
+| 4.6 | 文档 | `demo_notes`、`demo_pitch`、README |
 
-### 本里程碑可简化
+### 验收（M4）
 
-- 先做 **单进程 Tool 门面**（逻辑分离），验收「Agent 只调 Tool」  
-- 双进程拆分标为可选加分，不阻塞 M4 主验收  
-- 不必一上来上完整 MCP stdio/SSE 协议，HTTP Tool + 描述表即可  
-
-### 验收（M4 Done）
-
-- [ ] Agent / LangGraph 开票与再验路径**不**直接依赖 `app.parse.extract` / `app.validate` 实现模块  
-- [ ] 唯一业务入口为 Tool 门面（及同等 HTTP）；外部 `POST /api/parse_booking` 与 Agent 共用  
-- [ ] 演示可讲清：Tool = 规则与治理；Agent = 意图与人机分流  
-- [ ] （可选）两进程联调：Agent 配置 Tool 服务 URL 可跑通开票  
+- [x] 开票路径经 Tool，不直连抽数实现  
+- [x] 外部 `POST /api/parse_booking` 与 Agent 共用门面  
+- [x] 演示可讲：Tool = 解析治理；Agent = 会话与人机  
+- [x] 双进程联调可跑通（`TOOL_BASE_URL`）  
 
 ---
 
-## 待办记一笔（下一步再做）
+## 现状会话要点（相对早期计划的演进）
 
-| 项 | 说明 | 需求 | 建议插入 |
-| --- | --- | --- | --- |
-| **M4 Tool + Agent 边界** | Agent 通过封装 Tool 调解析/校验；可先同进程门面，再可选双服务 | API-01、AGT-02 | **下一步里程碑（本文 §M4）** |
-| **人工修正回流 / source case 回流** | 操作员在界面改对的结果，沉淀为可回归的 source/gold case（含原 PDF 或快照、修正后字段、必要时 meta/history 摘要），防止准确率回退 | VAL-07（原文第 ⑤ 层） | 可与 M4 并行或其后；M2 的 2.9 已有目录占位 |
+| 项 | 当前约定 |
+| --- | --- |
+| 提交后 | **Done**（保留字段只读），不是回 Idle |
+| 作废后 | Idle，可开新票 |
+| 录入中改字段 | 点提交/强制提交前前端先 `patch` → 图内改字段→再校验 |
+| Done 改字段 | 底栏指令，**不进**订舱 LangGraph |
+| 自动提交 | 仅纯 PASS + `auto_on_pass` |
+| 强制提交 | WARN/FAIL 时人确认后入库（应急） |
+
+详情与图：`docs/demo_pitch.md`、`docs/flow_design.md`（若与实现冲突，以代码与 `demo_pitch` 为准，flow 待对齐 Done）。
 
 ---
 
-## 建议节奏与依赖
+## Backlog（非阻塞演示）
+
+| 项 | 说明 |
+| --- | --- |
+| 混合解析 | 页图 + 文本层拼写约束（见 `booking_parse_summary`） |
+| flow_design 全文对齐 | 提交→Done、Done 指令图外等与实现一致 |
+| 标准 MCP 协议 | 现为 HTTP + 风格描述，非 stdio/SSE 全协议 |
+| Docling 等后端切换 | 配置预留，非演示主路径 |
+
+---
+
+## 建议节奏（已完成部分）
 
 ```text
 M1 骨架跑通 ✓
-  └─► M2 规则+评测+提准 ✓
-        └─► M3 选做加分（同进程 MCP 风格 + LangGraph）✓
-              └─► M4 Tool 门面 /（可选）Tool 服务 + Agent 服务   ← 下一步
-              └─► （可并行）人工修正 → 回归 source case 回流
+  └─► M2 规则+评测+提准 ✓（含 VAL-07 feedback）
+        └─► M3 选做加分 ✓（Done 指令 / AutoPass / LangGraph / MCP 风格）
+              └─► M4 Tool + Agent 边界 ✓（门面 + 可选双进程）
+                    └─► backlog / 演示打磨（pitch、flow 对齐等）
 ```
 
 | 原则 | 说明 |
 | --- | --- |
 | 先竖切再挖深 | M1 全链路窄实现，M2 加深校验与准确率 |
-| 评测驱动 M2 | 没有 gold/脚本不谈「提升准确率」 |
-| 选做不回流拖垮主链路 | M3 特性可开关，默认关闭不影响演示 |
-| Tool 边界后置 | M3 先同进程能讲；M4 再做 Agent→Tool 真边界，可选双进程 |
+| 评测驱动 | 没有 gold/脚本不谈「提升准确率」 |
+| 选做可开关 | AutoPass 等可配置，默认不影响讲清主路径 |
+| Tool / Agent 分离 | 已落地；演示讲调用边界即可 |
 
 ---
 
-## 文档与演示产出（穿插）
+## 文档与演示产出
 
-| 阶段 | 产出 |
-| --- | --- |
-| M1 末 | 可运行 Demo；README 启动说明 |
-| M2 末 | 准确率报告/表格；架构与校验说明草稿 |
-| M3 末 | PPT/Markdown 演示稿（架构、逻辑、准确率、选做） |
-| M4 末 | 架构图更新为 Tool / Agent 边界；可选双服务启动说明 |
+| 阶段 | 产出 | 状态 |
+| --- | --- | --- |
+| M1 | 可运行 Demo；README | 有 |
+| M2 | `eval_baseline`；解析复盘 | 有 |
+| M3 | 选做可演示 | 有 |
+| M4 | 双角色启动；架构可讲 | 有 |
+| 演示稿 | `docs/demo_pitch.md`（架构 / 核心逻辑 / 准确率） | 有 |
 
 ---
 
@@ -185,6 +191,6 @@ M1 骨架跑通 ✓
 
 | 日期 | 说明 |
 | --- | --- |
-| 2026-10-13 | 初版：M1 跑通 / M2 校验与准确率 / M3 选做 |
-| 2026-10-13 | 记一笔：人工修正回流为回归 source case（VAL-07），下一步再做完整能力 |
-| 2026-10-13 | 增补 **M4**：Tool 门面 +（可选）Tool 服务与 Agent 服务分离；标为下一步 |
+| 2026-10-13 | 初版：M1 / M2 / M3 |
+| 2026-10-13 | 记 VAL-07 回流；增补 M4 为下一步 |
+| 2026-10-15 | 按现状刷新：M3/M4 已完成；Done 态与 ADV-01 图外修正；VAL-07 已落地；后续改为 backlog；链到 `demo_pitch` |
