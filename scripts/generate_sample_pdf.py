@@ -314,7 +314,7 @@ def main() -> None:
         fail_lines,
         "BKG SAMPLE / SHIPPING ORDER (FAIL POL=POD)",
     )
-    # 无通知方：刻意不写 Notify Party，供 STRUCT-REQUIRED / 空通知方用例
+    # 无通知方：刻意不写 Notify Party，供 STRUCT-SCHEMA / 空通知方用例
     no_notify_lines = [(k, v) for k, v in lines if k != "Notify Party"]
     draw_booking(
         SAMPLES / "BKG_fail_no_notify.pdf",

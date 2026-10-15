@@ -36,7 +36,6 @@ def validate_booking(
     from app.validate.schema_check import check_schema
 
     issues.extend(check_schema(data))
-    issues.extend(rules.check_structure(data))
     issues.extend(rules.br_01_ports_differ(data))
     issues.extend(rules.br_02_ranges(data))
     issues.extend(rules.br_03_vessel(data))
@@ -45,6 +44,7 @@ def validate_booking(
     issues.extend(rules.br_06_ports_whitelist(data))
 
     conf = field_confidence or {}
+    # low 只表示「LLM 置信度分数偏低」；规则 FAIL/WARN 只在 issues 里，由 UI 按 issues 高亮
     low = [
         k
         for k, v in conf.items()
@@ -54,10 +54,6 @@ def validate_booking(
         and data.get(k) is not None
         and data.get(k) != ""
     ]
-    # 必填缺失也算低置信触发人工
-    for issue in issues:
-        if issue.rule == "STRUCT-REQUIRED" and issue.field not in low:
-            low.append(issue.field)
 
     overall = _overall(issues, low)
     report = ValidationReport(

@@ -1,4 +1,5 @@
 {
+  "comment": "gross_weight.max 为单箱上限；整票校验 × containers 总 qty。CBM 体积按箱型见 container_limits.json。",
   "gross_weight": {
     "KGS": {"min": 0.001, "max": 50000},
     "KG": {"min": 0.001, "max": 50000},

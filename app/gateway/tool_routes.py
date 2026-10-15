@@ -8,14 +8,26 @@ from fastapi import APIRouter, HTTPException
 
 from app.booking import process_booking, triple_from_record
 from app.config import SUBMIT_STRATEGY
-from app.models import ParseBookingRequest
+from app.models import ParseBookingRequest, ParseBookingResponse
 from app.observe import timed
 from app.validate.schema_check import load_booking_schema
 
 router = APIRouter(prefix="/api")
 
 
-@router.post("/parse_booking")
+@router.post(
+    "/parse_booking",
+    response_model=ParseBookingResponse,
+    responses={
+        400: {"description": "参数非法或非 PDF 等"},
+        404: {"description": "file_path 指向的文件不存在"},
+    },
+    summary="解析订舱 PDF 并业务校验",
+    description=(
+        "无会话门面：入参 PDF → 解析 + 校验 → 返回三件套等字段。"
+        "契约见 response_model；亦可 GET /api/mcp/tools 查看工具描述。"
+    ),
+)
 @timed("api_parse_booking")
 def parse_booking(body: ParseBookingRequest) -> dict[str, Any]:
     try:

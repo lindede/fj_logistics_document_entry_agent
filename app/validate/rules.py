@@ -2,58 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.config import REQUIRED_KEYS
-from app.masterdata import is_known_vessel, match_port, weight_limits
+from app.masterdata import (
+    is_known_vessel,
+    match_port,
+    max_measurement_cbm_total,
+    total_container_qty,
+    weight_limits,
+)
 from app.models import FieldIssue
 
-
-def check_structure(data: dict[str, Any]) -> list[FieldIssue]:
-    issues: list[FieldIssue] = []
-    for key in REQUIRED_KEYS:
-        val = data.get(key)
-        empty = val is None or val == "" or val == []
-        if empty:
-            issues.append(
-                FieldIssue(
-                    field=key,
-                    rule="STRUCT-REQUIRED",
-                    level="FAIL",
-                    message=f"required field missing: {key}",
-                )
-            )
-    containers = data.get("containers")
-    if containers is not None:
-        if not isinstance(containers, list):
-            issues.append(
-                FieldIssue(
-                    field="containers",
-                    rule="STRUCT-CONTAINERS",
-                    level="FAIL",
-                    message="containers must be an array",
-                )
-            )
-        else:
-            for i, item in enumerate(containers):
-                if not isinstance(item, dict) or "type" not in item or "qty" not in item:
-                    issues.append(
-                        FieldIssue(
-                            field="containers",
-                            rule="STRUCT-CONTAINERS",
-                            level="FAIL",
-                            message=f"containers[{i}] needs type and qty",
-                        )
-                    )
-    freight = data.get("freight")
-    if freight is not None and str(freight).upper() not in {"P", "C", "E"}:
-        issues.append(
-            FieldIssue(
-                field="freight",
-                rule="STRUCT-FREIGHT",
-                level="FAIL",
-                message="freight must be P/C/E or null",
-            )
-        )
-    return issues
+# 结构/类型（必填、containers、freight∈PCE 等）统一由 schema_check.STRUCT-SCHEMA 负责，此处只留 BR-*。
 
 
 def br_01_ports_differ(data: dict[str, Any]) -> list[FieldIssue]:
@@ -81,7 +39,9 @@ def br_01_ports_differ(data: dict[str, Any]) -> list[FieldIssue]:
 
 
 def br_02_ranges(data: dict[str, Any]) -> list[FieldIssue]:
+    """毛重/体积：表内为单箱上限；整票上限 = 单箱 × 箱数（体积再按箱型取单箱上限）。"""
     issues: list[FieldIssue] = []
+    qty = total_container_qty(data)
     gw = data.get("gross_weight")
     wu = data.get("weight_unit")
     if gw is not None:
@@ -108,15 +68,38 @@ def br_02_ranges(data: dict[str, Any]) -> list[FieldIssue]:
                     )
                 )
             lim = weight_limits("gross_weight", wu)
-            if lim and not (lim["min"] <= gwf <= lim["max"]):
-                issues.append(
-                    FieldIssue(
-                        field="gross_weight",
-                        rule="BR-02",
-                        level="FAIL",
-                        message=f"gross_weight {gwf} {wu} out of range {lim['min']}–{lim['max']}",
+            if lim and gwf > 0:
+                per_max = float(lim["max"])
+                per_min = float(lim["min"])
+                if qty:
+                    max_total = per_max * qty
+                    min_total = per_min
+                    if not (min_total <= gwf <= max_total):
+                        issues.append(
+                            FieldIssue(
+                                field="gross_weight",
+                                rule="BR-02",
+                                level="FAIL",
+                                message=(
+                                    f"gross_weight {gwf} {wu} out of range "
+                                    f"{min_total}–{max_total} "
+                                    f"(per-box max {per_max} × {qty} containers)"
+                                ),
+                            )
+                        )
+                elif not (per_min <= gwf <= per_max):
+                    # 无箱量：退回按单箱上限卡一道，避免飞数
+                    issues.append(
+                        FieldIssue(
+                            field="gross_weight",
+                            rule="BR-02",
+                            level="FAIL",
+                            message=(
+                                f"gross_weight {gwf} {wu} out of range "
+                                f"{per_min}–{per_max} (no container qty; per-box limit)"
+                            ),
+                        )
                     )
-                )
     meas = data.get("measurement")
     mu = data.get("measurement_unit")
     if meas is not None:
@@ -142,16 +125,51 @@ def br_02_ranges(data: dict[str, Any]) -> list[FieldIssue]:
                         message="measurement must be > 0",
                     )
                 )
-            lim = weight_limits("measurement", mu)
-            if lim and not (lim["min"] <= mf <= lim["max"]):
-                issues.append(
-                    FieldIssue(
-                        field="measurement",
-                        rule="BR-02",
-                        level="FAIL",
-                        message=f"measurement {mf} {mu} out of range {lim['min']}–{lim['max']}",
+            unit_u = str(mu or "").strip().upper()
+            if unit_u in {"CBM", "M3"} and mf > 0:
+                max_total = max_measurement_cbm_total(data)
+                if max_total is not None:
+                    if mf > max_total:
+                        issues.append(
+                            FieldIssue(
+                                field="measurement",
+                                rule="BR-02",
+                                level="FAIL",
+                                message=(
+                                    f"measurement {mf} {mu} exceeds max {max_total} "
+                                    f"(per-box CBM by container type × qty)"
+                                ),
+                            )
+                        )
+                else:
+                    # 无箱量：未知箱型单箱默认 50 CBM
+                    per_default = 50.0
+                    if mf > per_default:
+                        issues.append(
+                            FieldIssue(
+                                field="measurement",
+                                rule="BR-02",
+                                level="FAIL",
+                                message=(
+                                    f"measurement {mf} {mu} exceeds max {per_default} "
+                                    f"(no container qty; default per-box CBM)"
+                                ),
+                            )
+                        )
+            elif unit_u:
+                lim = weight_limits("measurement", mu)
+                if lim and not (lim["min"] <= mf <= lim["max"]):
+                    issues.append(
+                        FieldIssue(
+                            field="measurement",
+                            rule="BR-02",
+                            level="FAIL",
+                            message=(
+                                f"measurement {mf} {mu} out of range "
+                                f"{lim['min']}–{lim['max']}"
+                            ),
+                        )
                     )
-                )
     return issues
 
 
@@ -187,28 +205,18 @@ def br_04_shipper_consignee(data: dict[str, Any]) -> list[FieldIssue]:
 
 
 def br_05_no_fabricate(data: dict[str, Any]) -> list[FieldIssue]:
-    issues: list[FieldIssue] = []
+    """防 LLM 把无唛头编成 N/M；空串等结构问题交给 STRUCT-SCHEMA。"""
     marks = data.get("marks")
-    if isinstance(marks, str) and marks.strip().upper() in {"N/M", "NM", "N.M", ""}:
-        issues.append(
+    if isinstance(marks, str) and marks.strip().upper() in {"N/M", "NM", "N.M"}:
+        return [
             FieldIssue(
                 field="marks",
                 rule="BR-05",
                 level="FAIL",
-                message="marks must be null when no evidence (do not use N/M or empty string)",
+                message="marks must be null when no evidence (do not use N/M)",
             )
-        )
-    for key in ("hs_code", "marks", "freight"):
-        if data.get(key) == "":
-            issues.append(
-                FieldIssue(
-                    field=key,
-                    rule="BR-05",
-                    level="FAIL",
-                    message=f"{key} must be null when absent, not empty string",
-                )
-            )
-    return issues
+        ]
+    return []
 
 
 def br_06_ports_whitelist(data: dict[str, Any]) -> list[FieldIssue]:

@@ -1,0 +1,9 @@
+{
+  "comment": "单箱上限。measurement：按箱型（约33/68/76 CBM 档）放宽后的 Demo 阈值；未知箱型用 default。gross_weight 单箱上限仍见 weight_limits.json，整票再 × 箱数。",
+  "measurement_cbm_per_box": {
+    "20": 50,
+    "40": 80,
+    "40hq": 100,
+    "default": 50
+  }
+}

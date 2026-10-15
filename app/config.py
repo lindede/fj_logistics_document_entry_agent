@@ -119,7 +119,7 @@ def _load_booking_field_lists(
     props: dict[str, Any] = schema.get("properties") or {}
     field_keys = list(props.keys())
     optional_null = [k for k, p in props.items() if _type_allows_null(p)]
-    # voyage 在 schema 中为 string 且可空串，STRUCT-REQUIRED 不把它当「缺值」
+    # voyage 允许 ""，不进「业务必填有值」列表（结构约束以 JSON Schema 为准）
     required_keys = [
         k for k in field_keys if k not in optional_null and k != "voyage"
     ]

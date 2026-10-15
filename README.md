@@ -51,9 +51,14 @@ python scripts/eval_accuracy.py
 
 ## 主要 API
 
+交互式契约（OpenAPI，FastAPI 默认提供）：
+
+- Agent：http://127.0.0.1:8000/docs （另有 `/redoc`、`/openapi.json`）
+- Tool：http://127.0.0.1:8001/docs
+
 | 接口 | 说明 |
 | --- | --- |
-| `POST /api/parse_booking` | 解析+校验，返回三件套 |
+| `POST /api/parse_booking` | 解析+校验，返回三件套（Tool；请求/响应见 `/docs`） |
 | `GET /api/session` | 当前会话快照 |
 | `POST /api/session/action` | 开票/改数/提交/作废/自然语言指令 |
 | `POST /api/session/upload` | multipart 上传 PDF |

@@ -47,18 +47,37 @@ class ValidationReport(BaseModel):
 
 
 class ParseBookingRequest(BaseModel):
-    file_path: Optional[str] = None
-    base64_pdf: Optional[str] = None
+    """解析订舱 PDF：file_path 与 base64_pdf 至少提供一个。"""
+
+    file_path: Optional[str] = Field(
+        default=None,
+        description="本地相对/绝对路径，或 http(s) PDF URL",
+    )
+    base64_pdf: Optional[str] = Field(
+        default=None,
+        description="PDF 的 base64（可含 data: 前缀）",
+    )
 
 
 class ParseBookingResponse(BaseModel):
-    raw_extracted_data: dict[str, Any]
-    normalized_data: dict[str, Any]
-    validated_data: dict[str, Any]
-    validation_report: ValidationReport
-    llm_analysis: Optional[str] = None
-    doc_type_ok: bool = True
-    elapsed_ms: float = 0.0
+    """与 process_booking → triple_from_record 实际出参对齐（供 OpenAPI /docs）。"""
+
+    raw_extracted_data: Optional[dict[str, Any]] = Field(
+        default=None, description="模型抽取原样（未 normalize）"
+    )
+    normalized_data: Optional[dict[str, Any]] = Field(
+        default=None, description="规整后字段"
+    )
+    validated_data: Optional[dict[str, Any]] = Field(
+        default=None, description="校验后字段（供录入）"
+    )
+    validation_report: Optional[ValidationReport] = Field(
+        default=None, description="overall / issues / 置信度等"
+    )
+    llm_analysis: Optional[str] = Field(default=None, description="分阶段 ANALYSIS 叙述")
+    doc_type_ok: bool = Field(default=True, description="是否判为托运/订舱单")
+    filename: Optional[str] = None
+    backend: Optional[str] = Field(default=None, description="解析后端标记，如 llm/fixture")
 
 
 class SessionActionRequest(BaseModel):
