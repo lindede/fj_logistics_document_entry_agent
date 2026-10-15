@@ -67,16 +67,21 @@ python scripts/eval_accuracy.py
 
 | 文档 | 说明 |
 | --- | --- |
-| [docs/dev_plan.md](docs/dev_plan.md) | 开发计划 |
-| [docs/demo_notes.md](docs/demo_notes.md) | 演示架构 / 准确率 / 选做 |
-| [docs/eval_baseline.md](docs/eval_baseline.md) | 评测基线（跑评测脚本后生成） |
+| [docs/demo_pitch.md](docs/demo_pitch.md) | **现场演示主稿**（架构 / 核心逻辑 / 准确率） |
+| [docs/test_cases.md](docs/test_cases.md) | 已实现测试用例（按分层治理对照） |
+| [docs/dev_plan.md](docs/dev_plan.md) | 开发计划（M1–M4 现状） |
+| [docs/demo_notes.md](docs/demo_notes.md) | 演示备忘（端口 / 选做速查） |
+| [docs/eval_baseline.md](docs/eval_baseline.md) | 评测基线 |
+| [docs/booking_parse_summary.md](docs/booking_parse_summary.md) | 解析链路复盘 |
 | [docs/requirements_understanding.md](docs/requirements_understanding.md) | 需求对照 |
 | [docs/module_design.md](docs/module_design.md) | 模块设计 |
 | [docs/flow_design.md](docs/flow_design.md) | 流程与状态机 |
 | [docs/ui_design.md](docs/ui_design.md) | UI 架子 |
+| [data/gold/README.md](data/gold/README.md) | 金标与 Tool 用例说明 |
 
 ## 里程碑覆盖
 
 - **M1**：FastAPI + 解析/校验/会话/工作台/提交持久化
 - **M2**：BR-01～06、主数据、评测脚本与基线
-- **M3**：动态指令、可观测日志、MCP 描述、自动提交开关、换票询问
+- **M3**：Done 指令修正、可观测、MCP 风格、自动提交、换票询问
+- **M4**：Tool / Agent 双服务边界（见 [docs/dev_plan.md](docs/dev_plan.md)）

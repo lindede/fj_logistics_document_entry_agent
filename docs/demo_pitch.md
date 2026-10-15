@@ -116,6 +116,10 @@ flowchart LR
 | 人机 + 置信度 | Agent | 低置信等人；报告指引 |
 | 持续评估 | 两边资产 | 金标评测；修正写入回归用例 |
 
+**参考文档（已实现用例）**：[test_cases.md](test_cases.md) — 按上表五层列出 pytest / 金标 / 评测脚本；跑法见文内「怎么跑」。
+
+模块与流程细节：[module_design.md](module_design.md)、[flow_design.md](flow_design.md)、[booking_parse_summary.md](booking_parse_summary.md)。
+
 ---
 
 ## 3. 准确率提升方案
@@ -127,10 +131,11 @@ flowchart LR
 
 | 项 | 做法 |
 |----|------|
-| 金标 | 与样例 PDF 对齐的 gold |
-| 评测 | `scripts/eval_accuracy.py`；基线见 `docs/eval_baseline.md` |
+| 金标 | 与样例 PDF 对齐的 gold（见 [data/gold/README.md](../data/gold/README.md)） |
+| 评测 | `scripts/eval_accuracy.py`；基线见 [eval_baseline.md](eval_baseline.md) |
 | 当前基线 | 场景通过 `5/5`；字段准确率 `1.0` |
 | 指标 | 字段级匹配；规则场景结论是否符合预期 |
+| 用例清单 | [test_cases.md](test_cases.md) |
 
 ### 3.2 提准手段
 
@@ -139,4 +144,4 @@ flowchart LR
 3. **规则挡错**：规整 + Schema + 业务规则，不靠模型自律。
 4. **人机 + 回归**：低置信必人工；人工改后再提交的写入回归用例，防准确率回退。
 
-详见 `docs/booking_parse_summary.md`、`docs/flow_design.md`、`docs/eval_baseline.md`。
+详见 [booking_parse_summary.md](booking_parse_summary.md)、[flow_design.md](flow_design.md)、[eval_baseline.md](eval_baseline.md)、[test_cases.md](test_cases.md)。
