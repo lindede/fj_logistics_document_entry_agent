@@ -11,10 +11,8 @@ from app.agent.graph import (
     sync_done_state,
 )
 from app.agent.intents import detect_intent
-from app.booking import process_booking, triple_from_record
 from app.booking.feedback import save_pending_source
 from app.config import SUBMIT_STRATEGY
-from app.observe import timed, trace_stub
 from app.parse.pdf_io import resolve_pdf_input
 
 
@@ -33,28 +31,39 @@ class SessionManager:
             return {}
         return get_session_values(self.session_id)
 
+    def _idle_payload(
+        self,
+        *,
+        message: str,
+        history: list[Any] | None = None,
+        replace_pending: bool = False,
+    ) -> dict[str, Any]:
+        return {
+            "session_id": None,
+            "status": "Idle",
+            "message": message,
+            "raw_extracted_data": None,
+            "normalized_data": None,
+            "llm_analysis": None,
+            "validated_data": None,
+            "validation_report": None,
+            "meta": {},
+            "history": list(history or []),
+            "filename": None,
+            "submit_strategy": self.submit_strategy,
+            "replace_pending": replace_pending,
+            "highlight_fields": [],
+            "error_fields": [],
+        }
+
     def snapshot(self) -> dict[str, Any]:
         pending = bool(self._pending_replace)
         vals = self._values()
         if not self.session_id or not vals:
-            return {
-                "session_id": None,
-                "status": "Idle",
-                "message": "拖入 PDF 或输入开票指令开始",
-                "raw_extracted_data": None,
-                "normalized_data": None,
-                "llm_analysis": None,
-                "validated_data": None,
-                "validation_report": None,
-                "meta": {},
-                "history": [],
-                "filename": None,
-                "submit_strategy": self.submit_strategy,
-                "replace_pending": pending,
-                "composer_mode": "hidden",
-                "highlight_fields": [],
-                "error_fields": [],
-            }
+            return self._idle_payload(
+                message="拖入 PDF 或输入开票指令开始",
+                replace_pending=pending,
+            )
         status = vals.get("status") or "Idle"
         out = {
             "session_id": vals.get("session_id") or self.session_id,
@@ -71,7 +80,6 @@ class SessionManager:
             "submit_strategy": self.submit_strategy,
             "replace_pending": pending,
             "graph_waiting": session_is_waiting(self.session_id),
-            "composer_mode": "done_amend" if status == "Done" else "hidden",
             "highlight_fields": [],
             "error_fields": [],
         }
@@ -95,7 +103,7 @@ class SessionManager:
 
     @property
     def record(self) -> Any:
-        """兼容旧测试：从 graph state 投影常用字段。"""
+        """测试兼容：从 graph state 投影常用字段。"""
         vals = self._values()
         if not self.session_id:
             return None
@@ -108,9 +116,6 @@ class SessionManager:
         r.status = vals.get("status") or "Idle"
         r.message = vals.get("message")
         r.filename = vals.get("filename")
-        r.raw_extracted_data = vals.get("raw_extracted_data")
-        r.normalized_data = vals.get("normalized_data")
-        r.llm_analysis = vals.get("llm_analysis")
         r.validated_data = vals.get("validated_data")
         report = vals.get("validation_report")
         if report:
@@ -122,15 +127,6 @@ class SessionManager:
         r.meta = vals.get("meta") or {}
         r.history = list(vals.get("history") or [])
         return r
-
-    @timed("parse_and_validate")
-    def parse_and_validate(
-        self, file_path: str | None = None, base64_pdf: str | None = None
-    ) -> dict[str, Any]:
-        """无会话 Tool/API：不经线程，直接 process_booking。"""
-        trace_stub("parse_and_validate")
-        record = process_booking(file_path=file_path, base64_pdf=base64_pdf)
-        return triple_from_record(record)
 
     def open_booking(
         self, file_path: str | None = None, base64_pdf: str | None = None
@@ -189,24 +185,10 @@ class SessionManager:
         self.session_id = None
         self._pending_replace = None
         self._amend_preview = None
-        return {
-            "session_id": None,
-            "status": "Idle",
-            "message": vals.get("message") or "已作废，可开新票",
-            "raw_extracted_data": None,
-            "normalized_data": None,
-            "llm_analysis": None,
-            "validated_data": None,
-            "validation_report": None,
-            "meta": {},
-            "history": hist,
-            "filename": None,
-            "submit_strategy": self.submit_strategy,
-            "replace_pending": False,
-            "composer_mode": "hidden",
-            "highlight_fields": [],
-            "error_fields": [],
-        }
+        return self._idle_payload(
+            message=vals.get("message") or "已作废，可开新票",
+            history=hist,
+        )
 
     def handle(
         self,
@@ -225,8 +207,6 @@ class SessionManager:
 
         has_pdf = bool(file_path or base64_pdf)
 
-        if action in {"status", "snapshot"}:
-            return self.snapshot()
         if action == "submit":
             return self.submit(force=force)
         if action == "void":
