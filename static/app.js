@@ -32,6 +32,8 @@ let BOOKING_SCHEMA = null;
 
 let state = { status: "Idle" };
 let confirmResolver = null;
+/** 表单是否有本地编辑；WARN/FAIL 时用来点亮「提交」 */
+let formTouched = false;
 
 function propOf(key) {
   return (BOOKING_SCHEMA && BOOKING_SCHEMA.properties && BOOKING_SCHEMA.properties[key]) || {};
@@ -265,7 +267,7 @@ function actionButtonsHtml(s) {
     return "";
   }
   const awaitOk = st === "AwaitConfirm" || st === "AwaitHuman";
-  // 无问题才能普通提交；WARN/FAIL 走强制提交
+  // 初渲按服务端 overall；WARN/FAIL 的「提交」在编辑后由 syncActionButtons 打开
   const canSubmit = awaitOk && overall === "PASS";
   const canForce = awaitOk && (overall === "WARN" || overall === "FAIL");
   const canVoid = awaitOk;
@@ -274,6 +276,36 @@ function actionButtonsHtml(s) {
     <button type="button" id="btn-force" class="secondary" ${canForce ? "" : "disabled"}>强制提交</button>
     <button type="button" id="btn-void" class="secondary" ${canVoid ? "" : "disabled"}>撤销</button>
   </div>`;
+}
+
+function setButtonEnabled(el, on) {
+  if (!el) return;
+  el.disabled = !on;
+  if (on) el.removeAttribute("disabled");
+  else el.setAttribute("disabled", "");
+}
+
+/**
+ * PASS → 提交可用。
+ * WARN/FAIL + 已本地编辑 → 提交可用（点击时再 patch 重验并提交）。
+ * 未编辑的问题单 → 提交禁用；强制提交仍可用。
+ */
+function syncActionButtons() {
+  const sub = document.getElementById("btn-submit");
+  const force = document.getElementById("btn-force");
+  if (!sub && !force) return;
+  const st = state.status || "";
+  const awaitOk = st === "AwaitConfirm" || st === "AwaitHuman";
+  const overall = (state.validation_report || {}).overall || "";
+  const canSubmit = awaitOk && (overall === "PASS" || formTouched);
+  const canForce = awaitOk && (overall === "WARN" || overall === "FAIL");
+  setButtonEnabled(sub, canSubmit);
+  setButtonEnabled(force, canForce);
+}
+
+function onBookingFormEdit() {
+  formTouched = true;
+  syncActionButtons();
 }
 
 function renderResult(s) {
@@ -503,10 +535,17 @@ function bindResultActions() {
       if (ok) act({ action: "void" });
     };
   }
+  const form = document.getElementById("booking-form");
+  if (form) {
+    form.addEventListener("input", onBookingFormEdit);
+    form.addEventListener("change", onBookingFormEdit);
+  }
+  syncActionButtons();
 }
 
 function render(s, justDone = false) {
   state = s;
+  formTouched = false;
   const st = s.status || "Idle";
   paintStepper(st, justDone || st === "Done");
   const main = document.getElementById("main");
