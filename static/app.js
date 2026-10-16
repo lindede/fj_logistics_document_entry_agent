@@ -68,6 +68,13 @@ function labelHtml(key, label, confTxt) {
   return `${label}${star}${confTxt}`;
 }
 
+function isCanonicalNumber(value, integer) {
+  const s = String(value ?? "").trim();
+  if (!s) return true;
+  if (integer) return /^-?\d+$/.test(s);
+  return /^-?(?:\d+\.\d+|\d+|\.\d+)$/.test(s);
+}
+
 function controlHtml(key, value, { readonly = false } = {}) {
   const prop = propOf(key);
   const types = typeList(prop);
@@ -93,7 +100,8 @@ function controlHtml(key, value, { readonly = false } = {}) {
 
   if (types.includes("integer")) {
     const min = prop.minimum != null ? `min="${prop.minimum}"` : "";
-    return `<input data-key="${key}" type="number" step="1" ${min} ${reqAttr} ${roAttr} value="${esc(value ?? "")}" title="${esc(title)}" />`;
+    const inputType = isCanonicalNumber(value, true) ? "number" : "text";
+    return `<input data-key="${key}" type="${inputType}" step="1" ${min} ${reqAttr} ${roAttr} value="${esc(value ?? "")}" title="${esc(title)}" />`;
   }
   if (types.includes("number")) {
     const min =
@@ -106,7 +114,8 @@ function controlHtml(key, value, { readonly = false } = {}) {
       prop.exclusiveMinimum != null
         ? `data-exclusive-min="${prop.exclusiveMinimum}"`
         : "";
-    return `<input data-key="${key}" type="number" step="any" ${min} ${reqAttr} ${roAttr} value="${esc(value ?? "")}" title="${esc(title)}" ${ex} />`;
+    const inputType = isCanonicalNumber(value, false) ? "number" : "text";
+    return `<input data-key="${key}" type="${inputType}" step="any" ${min} ${reqAttr} ${roAttr} value="${esc(value ?? "")}" title="${esc(title)}" ${ex} />`;
   }
 
   const minLen = prop.minLength != null && req && !readonly ? `minlength="${prop.minLength}"` : "";
@@ -253,7 +262,7 @@ function renderContainerFields(
         <label>${FIELD_LABELS.container_type}${star}${confTxt}</label>
         <input data-ui="container_type" ${reqAttr} ${roAttr} value="${esc(c0.type ?? "")}" placeholder="如 40HQ" />
         <label class="field-label-qty">${FIELD_LABELS.container_qty}${star}${confTxt}</label>
-        <input data-ui="container_qty" type="number" ${qtyReq} step="1" ${roAttr} value="${esc(c0.qty ?? "")}" placeholder="数量" />
+        <input data-ui="container_qty" type="${isCanonicalNumber(c0.qty, true) ? "number" : "text"}" ${qtyReq} step="1" ${roAttr} value="${esc(c0.qty ?? "")}" placeholder="数量" />
         ${err ? `<div class="field-error">${esc(err)}</div>` : ""}
       </div>
       ${extra}
@@ -626,16 +635,16 @@ function collectContainersPatch() {
   if (!typeEl && !qtyEl) return undefined;
   const type = (typeEl?.value || "").trim();
   const qtyRaw = (qtyEl?.value || "").trim();
-  const qty = qtyRaw === "" ? null : Number(qtyRaw);
+  const qty = qtyRaw === "" ? null : isCanonicalNumber(qtyRaw, true) ? Number(qtyRaw) : qtyRaw;
   const rest = Array.isArray(state.validated_data?.containers)
     ? state.validated_data.containers.slice(1)
     : [];
-  if (!type && (qty == null || Number.isNaN(qty))) {
+  if (!type && qtyRaw === "") {
     return rest.length ? rest : null;
   }
   const first = {
     type: type || "",
-    qty: qty != null && !Number.isNaN(qty) ? qty : 1,
+    qty: qtyRaw === "" ? 1 : qty,
   };
   return [first, ...rest];
 }
@@ -648,8 +657,10 @@ function buildPatchesFromForm() {
     let v = el.value;
     const types = typeList(prop);
     if ((types.includes("integer") || types.includes("number")) && v !== "") {
-      v = Number(v);
-      if (types.includes("integer")) v = Math.trunc(v);
+      if (isCanonicalNumber(v, types.includes("integer"))) {
+        v = Number(v);
+        if (types.includes("integer")) v = Math.trunc(v);
+      }
     }
     if (v === "") v = allowsNull(prop) || k === "voyage" ? (k === "voyage" ? "" : null) : v;
     if (v === "" && allowsNull(prop)) v = null;

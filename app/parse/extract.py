@@ -12,6 +12,7 @@ from app.config import (
     LLM_INPUT_MODE,
     LLM_MODEL,
     LLM_PDF_FALLBACK_VISION,
+    LLM_TEXT_MODEL,
     OPENAI_TEMPERATURE,
     has_llm_key,
     make_openai_client,
@@ -118,6 +119,50 @@ def _extract_prompt_zh(*, as_pdf_file: bool = False) -> str:
     )
 
 
+def _extract_prompt_html() -> str:
+    """文字坐标 HTML + 文本模型。通知方只取标题正下方同一栏。"""
+    return (
+        "你是国际物流单证录入助手。下面给出的是出口货物托运单转成的 HTML（可含多页）。"
+        "每个 div.line 是视觉上的一行，span 的 left 是横向位置。"
+        "同一行里 left 差得远的 span 是不同栏，不要并成一栏。\n"
+        "\n"
+        "请严格按两个阶段输出（同一次回复内完成），格式如下：\n"
+        "\n"
+        "### ANALYSIS\n"
+        "（中文。按块简述 HTML 里你看到的内容，并尽量带上关键栏的原文：\n"
+        "货代/出具方、发货人、收货人、通知方、船名与航次、港口、箱型箱量、"
+        "货名件数毛重体积、运费等。\n"
+        "只写 HTML 里有的，不要猜。）\n"
+        "\n"
+        "### JSON\n"
+        "（紧接着只输出一个 JSON 对象，不要 markdown 代码围栏，不要在 JSON 后再写其它文字。\n"
+        "字段取值与上面 ANALYSIS 中对应栏位一致。\n"
+        "字段必须且仅含：\n"
+        "shipper, consignee, notify_party, vessel, voyage, port_of_loading, "
+        "port_of_discharge, containers（[{type, qty}]）, packages_qty, packages_unit, "
+        "goods_desc, gross_weight, weight_unit, measurement, measurement_unit, "
+        "hs_code, marks, freight。\n"
+        "\n"
+        "规则：\n"
+        "- 栏空或 HTML 里没有 → null（voyage 无航次号用 \"\"）。\n"
+        "- 通知方 notify_party：只取「Notify Party / 通知方」标题正下方、"
+        "且 left 与该标题同一栏的文字。"
+        "标题右侧（left 明显更大）的货代抬头、地址、电话、邮箱不是通知方。\n"
+        "- vessel：船名或船司简称；voyage：仅航次号（不要把开航日/ETD/电话当航次）。\n"
+        "- marks：N/M、NM、无真实唛头 → null。\n"
+        "- freight：P/C/E 或 null（预付/Prepaid→P；到付/Collect→C；约定/Elsewhere→E）。\n"
+        "- packages_qty / containers[].qty：integer；gross_weight / measurement：number。\n"
+        "\n"
+        "JSON 形态示例（虚构占位，勿当作本题答案）：\n"
+        '{"shipper":"...","consignee":"...","notify_party":"...","vessel":"...",'
+        '"voyage":"","port_of_loading":"...","port_of_discharge":"...",'
+        '"containers":[{"type":"...","qty":1}],"packages_qty":1,"packages_unit":"...",'
+        '"goods_desc":"...","gross_weight":1.0,"weight_unit":"KGS","measurement":1.0,'
+        '"measurement_unit":"CBM","hs_code":null,"marks":null,"freight":null}\n'
+        "）"
+    )
+
+
 def _normalize_freight(value: Any) -> str | None:
     """把单据常见写法规整为 P/C/E；无法识别则 null。"""
     if value is None:
@@ -196,9 +241,16 @@ def _parse_llm_response(content: str) -> tuple[str | None, dict[str, Any]]:
     return _extract_llm_analysis(content), _parse_llm_json_content(content)
 
 
-def _call_chat(client: Any, messages: list[dict[str, Any]], *, use_json_format: bool) -> str:
+def _call_chat(
+    client: Any,
+    messages: list[dict[str, Any]],
+    *,
+    use_json_format: bool,
+    model: str | None = None,
+) -> str:
+    chosen = model or LLM_MODEL
     kwargs: dict[str, Any] = {
-        "model": LLM_MODEL,
+        "model": chosen,
         "messages": messages,
         "temperature": OPENAI_TEMPERATURE,
     }
@@ -215,8 +267,7 @@ def _call_chat(client: Any, messages: list[dict[str, Any]], *, use_json_format: 
     content = resp.choices[0].message.content or ""
     if not content.strip():
         raise RuntimeError(
-            f"多模态模型返回空 content（model={LLM_MODEL}）。"
-            "请确认使用视觉/文件模型，如 glm-4.6v-flash。"
+            f"模型返回空 content（model={chosen}）。"
         )
     return content
 
@@ -227,12 +278,18 @@ def llm_extract_from_pdf(pdf_bytes: bytes, text_fallback: str = "") -> dict[str,
     返回 {"raw_extracted_data": dict, "llm_analysis": str|None}。
     raw 为模型 JSON 原样，不做 normalize。
     """
+    mode = (os.getenv("LLM_INPUT_MODE") or LLM_INPUT_MODE or "pdf").strip().lower()
+    if mode in {"html_struct", "xtml_struct"}:
+        from app.parse.html_struct import extract_html_struct
+
+        logger.info("LLM_INPUT_MODE=%s（不调用大模型）", mode)
+        return {"raw_extracted_data": extract_html_struct(pdf_bytes), "llm_analysis": None}
+
     if not has_llm_key():
         raise RuntimeError(
             "PARSE_BACKEND=llm 但未配置 OPENAI_API_KEY（请参考 kb_pdf_to_vdb 的 .env）"
         )
     client = make_openai_client()
-    mode = (os.getenv("LLM_INPUT_MODE") or LLM_INPUT_MODE or "pdf").strip().lower()
 
     def _pack(content: str, **extra: Any) -> dict[str, Any]:
         analysis, raw = _parse_llm_response(content)
@@ -282,6 +339,34 @@ def llm_extract_from_pdf(pdf_bytes: bytes, text_fallback: str = "") -> dict[str,
         logger.warning("LLM_INPUT_MODE=text：版面会丢失，建议 pdf 或 vision")
         return _pack(_call_chat(client, messages, use_json_format=True))
 
+    def run_html() -> dict[str, Any]:
+        from app.parse.html_layout import words_to_html
+
+        doc_html = words_to_html(pdf_bytes)
+        if "<span" not in doc_html:
+            raise RuntimeError(
+                "LLM_INPUT_MODE=html 需要 PDF 文字层，当前抽不出带坐标的文字"
+            )
+        prompt = _extract_prompt_html()
+        messages = [
+            {"role": "user", "content": f"{prompt}\n\n--- HTML ---\n{doc_html}"}
+        ]
+        logger.info(
+            "LLM_INPUT_MODE=html model=%s html_chars=%s",
+            LLM_TEXT_MODEL,
+            len(doc_html),
+        )
+        return _pack(
+            _call_chat(
+                client,
+                messages,
+                use_json_format=False,
+                model=LLM_TEXT_MODEL,
+            )
+        )
+
+    if mode == "html":
+        return run_html()
     if mode == "text":
         return run_text()
     if mode == "vision":

@@ -51,7 +51,8 @@ LLM_API_BASE = (os.getenv("LLM_API_BASE", "").strip() or OPENAI_BASE_URL).strip(
 LLM_MODEL = os.getenv("LLM_MODEL", "").strip() or OPENAI_MODEL
 LLM_TEXT_MODEL = os.getenv("LLM_TEXT_MODEL", "").strip() or OPENAI_TEXT_MODEL
 
-# pdf=file_url 直传整份 PDF（推荐，多页一份）；vision=每页渲图；text=纯文本（丢版面）
+# pdf=file_url 直传整份 PDF；vision=每页渲图；text=纯文本
+# html=文字坐标 HTML + 文本模型；html_struct=坐标和矩形框规则抽取，不调用大模型
 LLM_INPUT_MODE = os.getenv("LLM_INPUT_MODE", "pdf").strip().lower()
 # pdf 失败时是否自动回退 vision
 LLM_PDF_FALLBACK_VISION = os.getenv("LLM_PDF_FALLBACK_VISION", "true").strip().lower() in {

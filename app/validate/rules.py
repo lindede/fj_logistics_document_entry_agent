@@ -53,7 +53,7 @@ def br_02_ranges(data: dict[str, Any]) -> list[FieldIssue]:
                     field="gross_weight",
                     rule="BR-02",
                     level="FAIL",
-                    message="gross_weight must be numeric",
+                    message=f"gross_weight must be numeric: {gw}",
                 )
             )
             gwf = None
@@ -111,7 +111,7 @@ def br_02_ranges(data: dict[str, Any]) -> list[FieldIssue]:
                     field="measurement",
                     rule="BR-02",
                     level="FAIL",
-                    message="measurement must be numeric",
+                    message=f"measurement must be numeric: {meas}",
                 )
             )
             mf = None
