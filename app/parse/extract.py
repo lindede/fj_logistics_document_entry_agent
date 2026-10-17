@@ -366,26 +366,37 @@ def llm_extract_from_pdf(pdf_bytes: bytes, text_fallback: str = "") -> dict[str,
         )
 
     def run_html_mix() -> dict[str, Any]:
+        from app.models import FieldIssue
         from app.parse.html_mix import mix_diff_issues
-        from app.parse.html_struct import extract_html_struct
+        from app.parse.struct_forms import UNKNOWN_FAMILY, classify_and_extract
 
-        struct_raw = extract_html_struct(pdf_bytes)
+        classified = classify_and_extract(pdf_bytes)
         try:
             llm_packed = run_html()
         except Exception as exc:
-            raise RuntimeError(
-                f"html_mix：html LLM 失败（html_struct 已成功）：{exc}"
-            ) from exc
+            raise RuntimeError(f"html_mix：html LLM 失败：{exc}") from exc
         llm_raw = llm_packed["raw_extracted_data"]
-        struct_norm = _normalize_llm_fields(struct_raw)
-        llm_norm = _normalize_llm_fields(llm_raw)
-        diffs = mix_diff_issues(struct_norm, llm_norm)
+        if classified.family == UNKNOWN_FAMILY:
+            diffs = [
+                FieldIssue(
+                    field="_document",
+                    rule="MIX-FORM",
+                    level="WARN",
+                    message="未识别版式，结构侧未抽取",
+                )
+            ]
+        else:
+            struct_norm = _normalize_llm_fields(classified.fields)
+            llm_norm = _normalize_llm_fields(llm_raw)
+            diffs = mix_diff_issues(struct_norm, llm_norm)
         logger.info(
-            "LLM_INPUT_MODE=html_mix mix_diff_fields=%s",
+            "LLM_INPUT_MODE=html_mix form_family=%s mix_diff_fields=%s",
+            classified.family,
             [i.field for i in diffs],
         )
         out = dict(llm_packed)
-        out["html_struct_raw"] = struct_raw
+        out["form_family"] = classified.family
+        out["html_struct_raw"] = classified.fields
         out["mix_diff_issues"] = [i.model_dump() for i in diffs]
         return out
 
@@ -452,6 +463,9 @@ def parse_pdf_bytes(data: bytes) -> dict[str, Any]:
 
     llm_analysis: str | None = None
     vision_page_paths: list[str] = []
+    html_struct_raw = None
+    mix_diff_issues: list[Any] = []
+    form_family = None
     if backend == "fixture":
         raw = fixture_extract()
         mode = "fixture"
@@ -467,6 +481,7 @@ def parse_pdf_bytes(data: bytes) -> dict[str, Any]:
         vision_page_paths = list(packed.get("vision_page_paths") or [])
         html_struct_raw = packed.get("html_struct_raw")
         mix_diff_issues = list(packed.get("mix_diff_issues") or [])
+        form_family = packed.get("form_family")
     else:
         raise ValueError(
             f"unknown PARSE_BACKEND={backend!r}; expected 'llm' or 'fixture'"
@@ -487,6 +502,8 @@ def parse_pdf_bytes(data: bytes) -> dict[str, Any]:
         "vision_page_paths": vision_page_paths,
     }
     if backend == "llm":
+        if form_family:
+            result["form_family"] = form_family
         if html_struct_raw is not None:
             result["html_struct_raw"] = html_struct_raw
         if mix_diff_issues:

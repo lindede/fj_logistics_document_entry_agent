@@ -40,24 +40,6 @@ _KNOWN_UNITS = frozenset(
 _EXACT_NUM = re.compile(r"^\d+(?:\.\d+)?$")
 _NUM_UNIT = re.compile(r"^(\d+(?:\.\d+)?)([A-Za-z]+)$")
 
-# 别名已去掉空格和标点，按出现在标题文字里匹配
-_LABELS: tuple[tuple[str, tuple[str, ...]], ...] = (
-    ("shipper", ("发货人", "shipper")),
-    ("consignee", ("收货人", "consignee")),
-    ("notify_party", ("通知方", "notifyparty")),
-    ("vessel", ("船名", "vessel")),
-    ("port_of_loading", ("装货港", "portofloading")),
-    ("port_of_discharge", ("目的港", "portofdischarge")),
-    ("container_type", ("箱型",)),
-    ("container_qty", ("数量",)),
-    ("marks", ("唛头及号码", "marksandnumbers")),
-    ("packages", ("件数", "packages")),
-    ("goods_desc", ("货品名称", "descriptionofgoods")),
-    ("gross_weight", ("毛重",)),
-    ("measurement", ("体积",)),
-    ("freight", ("运费结算", "freightpaymentterms")),
-)
-
 
 @dataclass
 class Span:
@@ -120,59 +102,13 @@ def split_number_unit(text: str, header_unit: str | None) -> tuple[Any, str | No
 
 
 def extract_html_struct(pdf_bytes: bytes) -> dict[str, Any]:
-    """从文字层和矩形框抽出订舱字段。没有文字层时抛错。"""
-    spans, frames, rules = _read_layout(pdf_bytes)
-    if not spans:
-        raise RuntimeError("html_struct 需要 PDF 文字层，当前抽不出带坐标的文字")
+    """按已识别的运单版式抽取。未识别版式时抛错，不套用其它类的规则。"""
+    from app.parse.struct_forms import classify_and_extract
 
-    labels = [(s, field) for s in spans if (field := _classify(s))]
-    label_spans = {id(s) for s, _ in labels}
-    out: dict[str, Any] = {}
-    for span, field in labels:
-        if field in out:
-            continue
-        frame = _enclosing_frame(span, frames)
-        if frame is None:
-            if field == "freight":
-                text = _freight_value(span, spans, labels, rules)
-                if text:
-                    out["freight"] = text
-            continue
-        column, header_frames = _column_spans(span, frame, spans, frames, rules, label_spans)
-        text = _join(column)
-        if not text:
-            continue
-        header_unit = _header_unit(header_frames, spans)
-        if field in {"packages", "gross_weight", "measurement"}:
-            number, unit = split_number_unit(text, header_unit)
-            if field == "packages":
-                out["packages_qty"] = number
-                if unit:
-                    out["packages_unit"] = unit
-            elif field == "gross_weight":
-                out["gross_weight"] = number
-                if unit:
-                    out["weight_unit"] = unit
-            else:
-                out["measurement"] = number
-                if unit:
-                    out["measurement_unit"] = unit
-        elif field == "container_type":
-            out["_container_type"] = text
-        elif field == "container_qty":
-            out["_container_qty"] = _qty_token(text)
-        elif field == "vessel":
-            vessel, voyage = _vessel_voyage(text)
-            if vessel:
-                out["vessel"] = vessel
-            out["voyage"] = voyage
-        else:
-            out[field] = text
-
-    containers = _containers(out.pop("_container_type", None), out.pop("_container_qty", None))
-    if containers:
-        out["containers"] = containers
-    return out
+    result = classify_and_extract(pdf_bytes)
+    if result.family == "unknown":
+        raise RuntimeError("html_struct 未识别运单版式，没有对应的提取规则")
+    return result.fields
 
 
 def _as_number(token: str) -> int | float:
@@ -209,20 +145,6 @@ def _containers(ctype: Any, qty: Any) -> list[dict[str, Any]] | None:
     if qty not in (None, ""):
         row["qty"] = qty
     return [row] if row else None
-
-
-def _classify(span: Span) -> str | None:
-    compact = re.sub(r"[^a-z0-9\u4e00-\u9fff]", "", span.text.lower())
-    if not compact:
-        return None
-    best: str | None = None
-    best_len = 0
-    for field, aliases in _LABELS:
-        for alias in aliases:
-            if alias in compact and len(alias) > best_len:
-                best = field
-                best_len = len(alias)
-    return best
 
 
 def _unit_token(text: str) -> str | None:
@@ -397,6 +319,7 @@ def _freight_value(
     spans: list[Span],
     labels: list[tuple[Span, str]],
     rules: list[Rule],
+    classify_fn,
 ) -> str:
     horizontals = [
         rule
@@ -432,7 +355,7 @@ def _freight_value(
         for span in spans
         if span.page == anchor.page
         and id(span) != id(anchor)
-        and _classify(span) is None
+        and classify_fn(span) is None
         and above <= span.cy <= below
         and left_edge - 1 <= span.cx <= right_edge - 1
     ]

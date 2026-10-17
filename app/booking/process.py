@@ -131,6 +131,8 @@ def process_booking(
     }
     if parsed.get("html_struct_raw") is not None:
         meta["html_struct_raw"] = parsed["html_struct_raw"]
+    if parsed.get("form_family"):
+        meta["form_family"] = parsed["form_family"]
     if mix_raw:
         meta["mix_diff_fields"] = [i.get("field") for i in mix_raw]
     metrics_stub("parse_booking", overall=report.overall)

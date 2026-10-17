@@ -82,7 +82,6 @@ def test_html_mix_llm_failure_does_not_fall_back_to_struct(monkeypatch):
         assert False, "expected RuntimeError"
     except RuntimeError as exc:
         assert "html LLM 失败" in str(exc)
-        assert "html_struct 已成功" in str(exc)
 
 
 def test_process_booking_merges_mix_diff_as_warn(monkeypatch, tmp_path):
@@ -127,3 +126,44 @@ def test_struct_alone_matches_gold_ports():
     assert data["port_of_loading"] == _GOLD["port_of_loading"]
     assert data["port_of_discharge"] == _GOLD["port_of_discharge"]
     assert data["notify_party"] == _GOLD["notify_party"]
+
+
+def test_bkg_is_forwarder_export_so():
+    from app.parse.struct_forms import classify_and_extract
+
+    result = classify_and_extract(_BKG.read_bytes())
+    assert result.family == "forwarder_export_so"
+    assert result.fields["port_of_loading"]
+
+
+def test_unrecognized_form_does_not_use_forwarder_rules():
+    from app.parse.struct_forms import classify_and_extract
+
+    pdf = Path("data/samples/cn_shipping_orders/cn_shipping_order_blank_template.pdf")
+    result = classify_and_extract(pdf.read_bytes())
+    assert result.family == "unknown"
+    assert result.fields == {}
+    try:
+        extract_html_struct(pdf.read_bytes())
+        raise AssertionError("expected unrecognized layout to raise")
+    except RuntimeError as exc:
+        assert "未识别运单版式" in str(exc)
+
+
+def test_html_mix_unknown_form_warns_without_field_diffs(monkeypatch):
+    monkeypatch.setenv("LLM_INPUT_MODE", "html_mix")
+    monkeypatch.setattr("app.parse.extract.has_llm_key", lambda: True)
+    monkeypatch.setattr("app.parse.extract.make_openai_client", lambda: object())
+
+    def fake_call_chat(client, messages, *, use_json_format, model=None):
+        return "### ANALYSIS\nx\n### JSON\n" + json.dumps(_GOLD, ensure_ascii=False)
+
+    monkeypatch.setattr("app.parse.extract._call_chat", fake_call_chat)
+    pdf = Path("data/samples/cn_shipping_orders/cn_shipping_order_blank_template.pdf")
+    packed = llm_extract_from_pdf(pdf.read_bytes())
+    assert packed["form_family"] == "unknown"
+    assert packed["html_struct_raw"] == {}
+    assert packed["raw_extracted_data"]["port_of_loading"] == _GOLD["port_of_loading"]
+    assert len(packed["mix_diff_issues"]) == 1
+    assert packed["mix_diff_issues"][0]["rule"] == "MIX-FORM"
+    assert "未识别版式" in packed["mix_diff_issues"][0]["message"]
