@@ -83,14 +83,26 @@
 | --- | --- |
 | 单据类型识别 | 是否为托运/订舱类单证；不是则明确失败，不强行抽字段 |
 | 标准化 / 规整 | 清洗文本、统一编码与常见写法（原文「输入验证与标准化」主要落此） |
-| 字段抽取 | 默认 LLM；后端可配置切换（Docling/混合等） |
-| 产出 | `raw_extracted_data` |
+| 字段抽取 | 由 `LLM_INPUT_MODE` 选择路径（见下）；`PARSE_BACKEND=fixture` 离线读 gold |
+| 版式分类 | `html_struct` / `html_mix`：先识别运单家族再抽；未知不套用其它类规则 |
+| 产出 | `raw_extracted_data`；mix 另附 `form_family` / `html_struct_raw` / `mix_diff_issues` |
 
-样例 PDF 有文本层：优先文本；抽不出再 OCR/视觉（扫描件为扩展）。
+**输入模式**（`app/parse/extract.py`）：
+
+| 模式 | 行为 |
+| --- | --- |
+| `pdf` / `vision` | 多模态模型（整 PDF 或页图） |
+| `text` | 纯文本 + 文本模型 |
+| `html` | 文字坐标 HTML + 文本模型（无文字层报错） |
+| `html_struct` | 规则抽取，不调 LLM；未知版式报错 |
+| `html_mix` | 结构 + html LLM；主结果 LLM；不一致 `MIX-DIFF`；未知版式 `MIX-FORM` |
+
+版式插件：`app/parse/struct_forms/`（当前 `forwarder_export_so`）。共享几何与数字拆分：`app/parse/html_struct.py`。
 
 | 做 | 不做 |
 | --- | --- |
-| 规整 + 抽取 + 类型识别 | 不做装港≠卸港等业务硬规则（归 M-VAL） |
+| 规整 + 抽取 + 类型识别 +（可选）版式分类/对照 | 不做装港≠卸港等业务硬规则（归 M-VAL） |
+| 脏数字保留原文（不删「纠错字母」） | 不默认为空单位编造 KGS/CBM |
 
 ---
 
@@ -229,3 +241,4 @@ M-OBS ──横切──► M-GW / M-PAR / M-VAL / M-AGT
 | 日期 | 说明 |
 | --- | --- |
 | 2026-10-12 | 初版：前后端分层 + 七模块职责与依赖 |
+| 2026-10-17 | M-PAR：补齐 html / html_struct / html_mix 与版式家族 |

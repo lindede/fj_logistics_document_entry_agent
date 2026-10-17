@@ -22,6 +22,8 @@
 
 扫描拆页等 PDF 尚未标金标，要加就补 `gold/*.json` + cases 一行。
 
+规则抽取 / 对照：`html_struct` 对 `BKG.pdf` 应对齐本金标大部分字段（`goods_desc` 可能多保留中文行）；`html_mix` 主结果仍以 LLM 为准。模式说明见 `docs/booking_parse_summary.md`。
+
 ## 怎么跑
 
 ```bash

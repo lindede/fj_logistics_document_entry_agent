@@ -21,6 +21,6 @@
 
 | 文件 | 说明 |
 |------|------|
-| `demo_filled_shipping_order.pdf` | 虚构当事人的出口托运单样式页，带文字层；可用 `html` / `html_struct` / `html_mix` 做端到端测试。**不是真实出运单。** |
+| `demo_filled_shipping_order.pdf` | 虚构当事人的出口托运单样式页，带文字层；可用 `html` / `html_mix` 试抽。是否命中 `forwarder_export_so` 取决于标题条几何；未命中时 `html_struct` 会报未识别版式。**不是真实出运单。** |
 
-商业填写过的托运单很少能免费再分发。已有金标准样张仍用仓库里的 `../BKG.pdf`。
+商业填写过的托运单很少能免费再分发。已有金标准样张仍用仓库里的 `../BKG.pdf`。多数公开空白模板对规则抽取为 `unknown`，属预期。

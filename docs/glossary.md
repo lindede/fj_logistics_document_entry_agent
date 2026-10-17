@@ -44,7 +44,15 @@
 | 会话 ID | session_id | 一票唯一标识；**同时**作为 LangGraph `thread_id`（仅在 `_cfg` 映射）。禁止另维护第二套 ID |
 | MCP Tool | Model Context Protocol Tool | 优先封装形态；可与 HTTP API 并存 |
 | 解析接口 | `/api/parse_booking` | 解析+校验一体的 HTTP 形态 |
-| 多模态 / 非结构化 | multimodal / unstructured | 版式不固定的文档；文本层优先，必要时 OCR/视觉 |
+| 多模态 / 非结构化 | multimodal / unstructured | 版式不固定的文档；可按模式走视觉、坐标 HTML 或规则 |
+| 输入模式 | `LLM_INPUT_MODE` | `pdf` / `vision` / `text` / `html` / `html_struct` / `html_mix` |
+| 文字坐标 HTML | html layout | 词级 `left`/`top` 的 HTML，供文本模型读版面（不画框线给模型） |
+| 规则结构抽取 | `html_struct` | 坐标 + 矩形标题条 + 标签规则；不调大模型；别名 `xtml_struct` |
+| 混合对照 | `html_mix` | 先结构再 html LLM；主结果用 LLM |
+| 版式家族 | `form_family` | 运单提供者/版式分类 id；当前有 `forwarder_export_so`、`unknown` |
+| 货代出口托运单家族 | `forwarder_export_so` | BKG 一类：标题条内有发货人，且有收货人、装货港标签 |
+| 结构对照差 | `MIX-DIFF` | html_mix 下结构侧与 LLM 某字段不一致（WARN） |
+| 未识别版式 | `MIX-FORM` | html_mix 下未识别家族，结构侧未抽取（单条 WARN，非逐字段空 diff） |
 | 字段置信度 | field confidence | LLM 抽取路径上的字段分；用于日志/降级，不单独放行 |
 | 工程边界 | — | 规则与结构裁决；冲突时：规则 > 人工 > LLM |
 | 动态指令 | ADV-01 | 自然语言改已录入字段（如 KGS→TON），改后须再校验 |

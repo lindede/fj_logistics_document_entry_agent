@@ -70,11 +70,13 @@ flowchart LR
   valStep --> outResult[返回结果]
 ```
 
+解析可按 `LLM_INPUT_MODE` 走 pdf / vision / html，或 **html_struct**（版式分类 + 规则、不调模型），或 **html_mix**（LLM 为主 + 结构对照，不一致进 WARN）。
+
 | 做 | 不做 |
 |----|------|
 | 解析 + 校验一次齐套 | 不管会话、不问人、不写落盘 |
 | 规则挡错；缺字段不编造 | 不负责自动提交 / 指令修正 |
-| 可被 Agent 或外部单独调用 | — |
+| 可被 Agent 或外部单独调用 | 未知版式不硬套 BKG 规则 |
 
 口播：*「Tool 只回答抽成什么样、能不能过；过不过看校验结论。」*
 
@@ -110,10 +112,10 @@ flowchart LR
 
 | 层 | 主要落在 | 要点 |
 |----|----------|------|
-| 输入标准化 | Tool | PDF→页图/文本；字段规整 |
-| 结构化输出 | Tool | Schema / JSON 约束 |
-| 业务规则 | Tool | 港口、重量、白名单等 |
-| 人机 + 置信度 | Agent | 低置信等人；报告指引 |
+| 输入标准化 | Tool | PDF→页图 / 坐标 HTML / 规则几何；字段规整；脏数字保留原文 |
+| 结构化输出 | Tool | Schema / JSON 约束；版式家族分派 |
+| 业务规则 | Tool | 港口、重量、白名单；`MIX-DIFF` / `MIX-FORM` 对照警告 |
+| 人机 + 置信度 | Agent | 低置信等人；报告指引；表单不吞脏串 |
 | 持续评估 | 两边资产 | 金标评测；修正写入回归用例 |
 
 **参考文档（已实现用例）**：[test_cases.md](test_cases.md) — 按上表五层列出 pytest / 金标 / 评测脚本；跑法见文内「怎么跑」。
@@ -139,9 +141,10 @@ flowchart LR
 
 ### 3.2 提准手段
 
-1. **标签与 Prompt**：样例字段对齐；少样本字段说明。
-2. **保版面**：优先页图 / 整份 PDF，避免纯文本毁掉表格关系。
-3. **规则挡错**：规整 + Schema + 业务规则，不靠模型自律。
-4. **人机 + 回归**：低置信必人工；人工改后再提交的写入回归用例，防准确率回退。
+1. **标签与 Prompt**：样例字段对齐；ANALYSIS→JSON 分阶段；html 路径用坐标 HTML。
+2. **保版面 / 保拼写**：有文字层用 `html` / `html_mix`；扫描件用 vision / pdf；避免纯 text。
+3. **规则挡错 + 对照**：Schema + BR；`html_struct` 按版式家族抽取；`html_mix` 与 LLM 逐字段对照。
+4. **不洗掉错误**：脏 token（如 `2560OKGS`）保留到校验与表单。
+5. **人机 + 回归**：低置信必人工；人工改后再提交写入回归用例。
 
 详见 [booking_parse_summary.md](booking_parse_summary.md)、[flow_design.md](flow_design.md)、[eval_baseline.md](eval_baseline.md)、[test_cases.md](test_cases.md)。

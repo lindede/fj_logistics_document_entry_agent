@@ -202,12 +202,17 @@ UC-09：不经会话状态机；M-GW 内解析 → 校验，直接返回三件�
 
 ```text
 M-GW: PDF 格式校验
-  → M-PAR: 类型识别 → 规整 → LLM 抽取 → raw
+  → M-PAR: 类型识别 →（按 LLM_INPUT_MODE）抽取 → raw
+           pdf/vision/text/html → LLM
+           html_struct → 版式分类 + 规则（未知版式失败）
+           html_mix → 分类+规则对照 + html LLM（主结果）；MIX-* 进 issues
+         → 规整 → normalized
   → M-VAL: 结构检查 → 业务规则（M-MD）→ 汇总 → validated + report
   → M-OBS: 日志等（横切）
 ```
 
-会话路径下，出校验后进入 **校验网关（含提交策略）**；UC-09 仅返回三件套。
+会话路径下，出校验后进入 **校验网关（含提交策略）**；UC-09 仅返回三件套。  
+模式细节见 `docs/booking_parse_summary.md`。
 
 | 阶段 | 失败时 | Use Case |
 | --- | --- | --- |
@@ -240,3 +245,4 @@ M-GW: PDF 格式校验
 | 2026-10-12 | 纳入提交策略：状态机/网关/主路径支持 `manual` 与 `auto_on_pass` |
 | 2026-10-12 | 状态机改布局：Idle 为外层「家」，进行中为内层复合态；Agent 明确提交/持久化节点 |
 | 2026-10-12 | 取消 Revalidating；拆出 Parsing + Validating，再校验复用 Validating |
+| 2026-10-17 | §8 解析链路对齐 html / html_struct / html_mix 与版式分类 |

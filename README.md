@@ -1,6 +1,6 @@
 # 国际物流单证录入智能体（fj_logistics_document_entry_agent）
 
-出口托运单（BKG）解析、业务校验与人机协同录入 Demo（里程碑 M1–M3）。
+出口托运单（BKG）解析、业务校验与人机协同录入 Demo（里程碑 M1–M4）。
 
 ## 快速启动
 
@@ -25,7 +25,7 @@ uvicorn app.main:app --reload --port 8000
 ./scripts/start_agent.sh
 ```
 
-启动脚本会 `source .env`。`PARSE_BACKEND` 以 `.env` 为准（示例为 `llm`）；离线联调可 `PARSE_BACKEND=fixture ./scripts/start_tool.sh`。亦可用 `TOOL_PORT` / `AGENT_PORT` / `TOOL_BASE_URL`。
+启动脚本会 `source .env`。`PARSE_BACKEND` / `LLM_INPUT_MODE` 以 `.env` 为准（示例为 `llm` + `pdf`）；离线联调可 `PARSE_BACKEND=fixture ./scripts/start_tool.sh`。亦可用 `TOOL_PORT` / `AGENT_PORT` / `TOOL_BASE_URL`。uvicorn `--reload` **不**监视 `.env`，改模式后需重启服务。
 
 金标测 Tool 抽取流（须 Tool 已起且多为 `llm`）：
 
@@ -39,7 +39,28 @@ python scripts/eval_tool_gold.py
 Agent 开票节点通过 LangChain `StructuredTool` / `invoke_parse_booking` 调 Tool，**不直连** `extract`。  
 `file_path` 支持仓库相对路径、绝对路径、以及 `http(s)://` 远程 PDF。
 
-样例 PDF：`data/samples/BKG.pdf`（从需求 Word 附件抽出的官方托运单）。
+## 解析模式（`LLM_INPUT_MODE`）
+
+| 模式 | 说明 |
+| --- | --- |
+| `pdf` | 多模态 `file_url` 直传 PDF（代码默认） |
+| `vision` | 每页渲成 PNG 再传视觉模型 |
+| `text` | 纯文本 + 文本模型（丢版面） |
+| `html` | 文字坐标 HTML + `OPENAI_TEXT_MODEL`（需文字层） |
+| `html_struct` | 版式分类 + 坐标/矩形规则，**不调大模型**（别名 `xtml_struct`） |
+| `html_mix` | 先结构抽取再 html LLM；主结果用 LLM，不一致记 `MIX-DIFF`；未知版式记 `MIX-FORM` |
+
+规则抽取按运单**版式家族**分派（当前实现 `forwarder_export_so`；未知不套用 BKG 规则）。详见 [docs/booking_parse_summary.md](docs/booking_parse_summary.md)。
+
+视觉模型：`OPENAI_MODEL`（如 `glm-4.6v`）。文本 / html：`OPENAI_TEXT_MODEL`。完整变量见 `.env.example`。
+
+## 样例 PDF
+
+| 路径 | 说明 |
+| --- | --- |
+| `data/samples/BKG.pdf` | 主金标托运单（货代出口 SO 版式） |
+| `data/samples/cn_shipping_orders/` | 中文落货纸/托运单教学样张 |
+| `data/samples/web_shipping_orders/` | 公开空白模板 + 本地生成填单 |
 
 ## 验收脚本
 
@@ -65,9 +86,6 @@ python scripts/eval_accuracy.py
 | `GET /api/mcp/tools` | MCP 风格 Tool 描述 |
 | `POST /api/config/submit_strategy` | `manual` / `auto_on_pass` |
 
-抽取主路径：`OPENAI_MODEL=glm-4.6v-flash` + `LLM_INPUT_MODE=pdf`（`file_url` **整份 PDF 直传**，多页不必拼成一张图）。  
-失败时可回退 `vision`（每页一张图）。配置见 `.env.example`。
-
 ## 文档
 
 | 文档 | 说明 |
@@ -77,7 +95,7 @@ python scripts/eval_accuracy.py
 | [docs/dev_plan.md](docs/dev_plan.md) | 开发计划（M1–M4 现状） |
 | [docs/demo_notes.md](docs/demo_notes.md) | 演示备忘（端口 / 选做速查） |
 | [docs/eval_baseline.md](docs/eval_baseline.md) | 评测基线 |
-| [docs/booking_parse_summary.md](docs/booking_parse_summary.md) | 解析链路复盘 |
+| [docs/booking_parse_summary.md](docs/booking_parse_summary.md) | **解析链路复盘**（模式 / 版式 / mix） |
 | [docs/requirements_understanding.md](docs/requirements_understanding.md) | 需求对照 |
 | [docs/module_design.md](docs/module_design.md) | 模块设计 |
 | [docs/flow_design.md](docs/flow_design.md) | 流程与状态机 |

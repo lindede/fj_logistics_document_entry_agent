@@ -49,6 +49,7 @@ def _dump_parse_debug(
         "validated_data": record.validated_data,
         "validation_report": report.model_dump() if report else None,
         "field_confidence": parsed.get("field_confidence"),
+        "form_family": parsed.get("form_family"),
         "html_struct_raw": parsed.get("html_struct_raw"),
         "mix_diff_issues": parsed.get("mix_diff_issues"),
         "status": record.status,
