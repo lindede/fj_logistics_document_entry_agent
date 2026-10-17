@@ -365,6 +365,32 @@ def llm_extract_from_pdf(pdf_bytes: bytes, text_fallback: str = "") -> dict[str,
             )
         )
 
+    def run_html_mix() -> dict[str, Any]:
+        from app.parse.html_mix import mix_diff_issues
+        from app.parse.html_struct import extract_html_struct
+
+        struct_raw = extract_html_struct(pdf_bytes)
+        try:
+            llm_packed = run_html()
+        except Exception as exc:
+            raise RuntimeError(
+                f"html_mix：html LLM 失败（html_struct 已成功）：{exc}"
+            ) from exc
+        llm_raw = llm_packed["raw_extracted_data"]
+        struct_norm = _normalize_llm_fields(struct_raw)
+        llm_norm = _normalize_llm_fields(llm_raw)
+        diffs = mix_diff_issues(struct_norm, llm_norm)
+        logger.info(
+            "LLM_INPUT_MODE=html_mix mix_diff_fields=%s",
+            [i.field for i in diffs],
+        )
+        out = dict(llm_packed)
+        out["html_struct_raw"] = struct_raw
+        out["mix_diff_issues"] = [i.model_dump() for i in diffs]
+        return out
+
+    if mode == "html_mix":
+        return run_html_mix()
     if mode == "html":
         return run_html()
     if mode == "text":
@@ -439,13 +465,15 @@ def parse_pdf_bytes(data: bytes) -> dict[str, Any]:
         raw = packed["raw_extracted_data"]
         llm_analysis = packed.get("llm_analysis")
         vision_page_paths = list(packed.get("vision_page_paths") or [])
+        html_struct_raw = packed.get("html_struct_raw")
+        mix_diff_issues = list(packed.get("mix_diff_issues") or [])
     else:
         raise ValueError(
             f"unknown PARSE_BACKEND={backend!r}; expected 'llm' or 'fixture'"
         )
 
     normalized = _normalize_llm_fields(raw)
-    return {
+    result: dict[str, Any] = {
         "raw_extracted_data": raw,
         "normalized_data": normalized,
         "llm_analysis": llm_analysis,
@@ -458,3 +486,9 @@ def parse_pdf_bytes(data: bytes) -> dict[str, Any]:
         "text_layer_thin": thin,
         "vision_page_paths": vision_page_paths,
     }
+    if backend == "llm":
+        if html_struct_raw is not None:
+            result["html_struct_raw"] = html_struct_raw
+        if mix_diff_issues:
+            result["mix_diff_issues"] = mix_diff_issues
+    return result

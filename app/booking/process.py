@@ -49,6 +49,8 @@ def _dump_parse_debug(
         "validated_data": record.validated_data,
         "validation_report": report.model_dump() if report else None,
         "field_confidence": parsed.get("field_confidence"),
+        "html_struct_raw": parsed.get("html_struct_raw"),
+        "mix_diff_issues": parsed.get("mix_diff_issues"),
         "status": record.status,
         "message": record.message,
     }
@@ -85,6 +87,12 @@ def process_booking(
 
     # 校验落在 normalize 之后，不污染 raw
     validated, report = validate_booking(normalized, conf)
+    mix_raw = list(parsed.get("mix_diff_issues") or [])
+    for item in mix_raw:
+        report.issues.append(FieldIssue(**item))
+    if mix_raw and report.overall == "PASS":
+        report.overall = "WARN"
+        report.suggested_action = "await_confirm_review_warnings"
     if not doc_ok:
         report.overall = "FAIL"
         report.issues.insert(
@@ -110,6 +118,7 @@ def process_booking(
                 "overall": report.overall,
                 "backend": backend,
                 "has_llm_analysis": bool(llm_analysis),
+                "mix_diff_count": len(mix_raw),
             },
         }
     ]
@@ -120,6 +129,10 @@ def process_booking(
             k: {"source": "llm"} for k, v in (validated or {}).items() if v is not None
         },
     }
+    if parsed.get("html_struct_raw") is not None:
+        meta["html_struct_raw"] = parsed["html_struct_raw"]
+    if mix_raw:
+        meta["mix_diff_fields"] = [i.get("field") for i in mix_raw]
     metrics_stub("parse_booking", overall=report.overall)
     record = BookingRecord(
         session_id=sid,

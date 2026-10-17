@@ -53,6 +53,7 @@ LLM_TEXT_MODEL = os.getenv("LLM_TEXT_MODEL", "").strip() or OPENAI_TEXT_MODEL
 
 # pdf=file_url 直传整份 PDF；vision=每页渲图；text=纯文本
 # html=文字坐标 HTML + 文本模型；html_struct=坐标和矩形框规则抽取，不调用大模型
+# html_mix=先 html_struct 再 html，主结果用 LLM，不一致记 MIX-DIFF WARN
 LLM_INPUT_MODE = os.getenv("LLM_INPUT_MODE", "pdf").strip().lower()
 # pdf 失败时是否自动回退 vision
 LLM_PDF_FALLBACK_VISION = os.getenv("LLM_PDF_FALLBACK_VISION", "true").strip().lower() in {
