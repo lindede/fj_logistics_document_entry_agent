@@ -25,7 +25,7 @@ uvicorn app.main:app --reload --port 8000
 ./scripts/start_agent.sh
 ```
 
-启动脚本会 `source .env`。`PARSE_BACKEND` / `LLM_INPUT_MODE` 以 `.env` 为准（示例为 `llm` + `pdf`）；离线联调可 `PARSE_BACKEND=fixture ./scripts/start_tool.sh`。亦可用 `TOOL_PORT` / `AGENT_PORT` / `TOOL_BASE_URL`。uvicorn `--reload` **不**监视 `.env`，改模式后需重启服务。
+启动脚本会 `source .env`。`PARSE_BACKEND` / `LLM_INPUT_MODE` 以 `.env` 为准（`.env.example` 演示默认：`llm` + `html_mix`）；离线联调可 `PARSE_BACKEND=fixture ./scripts/start_tool.sh`。亦可用 `TOOL_PORT` / `AGENT_PORT` / `TOOL_BASE_URL`。uvicorn `--reload` **不**监视 `.env`，改模式后需重启服务。复制 `.env.example` 时只填本地 `OPENAI_API_KEY`，勿把密钥提交进仓。
 
 金标测 Tool 抽取流（须 Tool 已起且多为 `llm`）：
 
@@ -43,12 +43,12 @@ Agent 开票节点通过 LangChain `StructuredTool` / `invoke_parse_booking` 调
 
 | 模式 | 说明 |
 | --- | --- |
-| `pdf` | 多模态 `file_url` 直传 PDF（代码默认） |
-| `vision` | 每页渲成 PNG 再传视觉模型 |
-| `text` | 纯文本 + 文本模型（丢版面） |
+| `html_mix` | **演示默认**；先结构抽取再 html LLM；主结果用 LLM，不一致记 `MIX-DIFF`；未知版式记 `MIX-FORM` |
 | `html` | 文字坐标 HTML + `OPENAI_TEXT_MODEL`（需文字层） |
 | `html_struct` | 版式分类 + 坐标/矩形规则，**不调大模型**（别名 `xtml_struct`） |
-| `html_mix` | 先结构抽取再 html LLM；主结果用 LLM，不一致记 `MIX-DIFF`；未知版式记 `MIX-FORM` |
+| `pdf` | 多模态 `file_url` 直传 PDF（未设环境变量时的代码兜底） |
+| `vision` | 每页渲成 PNG 再传视觉模型 |
+| `text` | 纯文本 + 文本模型（丢版面） |
 
 规则抽取按运单**版式家族**分派（当前实现 `forwarder_export_so`；未知不套用 BKG 规则）。详见 [docs/booking_parse_summary.md](docs/booking_parse_summary.md)。
 

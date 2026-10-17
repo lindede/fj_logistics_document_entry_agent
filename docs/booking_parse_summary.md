@@ -195,7 +195,7 @@ PDF
 | 扫描件 / 无可用文字层 | `vision` 或 `pdf` + `OPENAI_MODEL=glm-4.6v` |
 | 离线单测 | `PARSE_BACKEND=fixture` |
 
-默认代码 / `.env.example` 仍是 `LLM_INPUT_MODE=pdf`；本地演示可按上表改 `.env`（勿把含密钥的 `.env` 提交进仓）。
+`.env.example` 演示默认已是 `html_mix`（文本模型示例 `glm-5.3`）；未设环境变量时代码兜底仍为 `pdf`。复制示例后只在本地 `.env` 填 `OPENAI_API_KEY`，勿把含密钥的 `.env` 提交进仓。
 
 ---
 
